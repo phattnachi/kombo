@@ -256,57 +256,17 @@ static func draw_empty_cell(
 	if mult_value < 2:
 		return
 
-	var inset: float = clampf(minf(rect.size.x, rect.size.y) * 0.028, 1.0, 1.8)
-	var slot: Rect2 = rect.grow(-inset)
-	var inner: Rect2 = slot.grow(-1.2)
 	var pulse: float = 0.5 + 0.5 * sin(time_sec * 3.4 + float(row * 3 + col * 5) * 0.45)
 	var is_x3: bool = mult_value >= 3
 
-	var fill_a: Color = Color(0.24, 0.07, 0.28, 0.94) if is_x3 else Color(0.07, 0.20, 0.34, 0.94)
-	var fill_b: Color = Color(0.36, 0.10, 0.38, 0.96) if is_x3 else Color(0.10, 0.31, 0.47, 0.96)
-	var cell_tint: Color = fill_a.lerp(fill_b, pulse * 0.65)
-	ci.draw_rect(inner, cell_tint, true)
-
-	# Sleek angled diagonal energy stripes inside the multiplier tile.
-	var stripe_col: Color = Color(1.0, 0.46, 0.88, 0.14 + pulse * 0.06) if is_x3 else Color(0.22, 0.90, 1.0, 0.13 + pulse * 0.06)
-	_draw_clipped_diagonal_stripes(ci, inner, stripe_col)
-
-	# Glowing border framing.
-	var outer_glow_col: Color = Color(1.0, 0.22, 0.84, 0.38 + pulse * 0.30) if is_x3 else Color(0.14, 0.89, 1.0, 0.36 + pulse * 0.28)
-	var rim_col: Color = Color("#FFD642").lerp(Color("#FF5CE6"), 0.28 + 0.22 * pulse) if is_x3 else Color("#24E8FF").lerp(Color("#FFD94D"), 0.35 + 0.15 * pulse)
-
-	ci.draw_rect(inner.grow(-0.5), outer_glow_col, false, 3.2, true)
-	ci.draw_rect(inner.grow(-1.0), rim_col, false, 1.75, true)
-
-	# Corner accents: glowing diamonds on x3, crisp tech ticks on x2.
-	var c_inset: float = maxf(4.5, minf(inner.size.x, inner.size.y) * 0.115)
-	if is_x3:
-		var d_r: float = maxf(2.4, minf(inner.size.x, inner.size.y) * 0.055)
-		var diamond_col: Color = Color("#FFE875").lerp(Color.WHITE, pulse * 0.35)
-		_draw_diamond(ci, Vector2(inner.position.x + c_inset, inner.position.y + c_inset), d_r, diamond_col)
-		_draw_diamond(ci, Vector2(inner.end.x - c_inset, inner.position.y + c_inset), d_r, diamond_col)
-		_draw_diamond(ci, Vector2(inner.end.x - c_inset, inner.end.y - c_inset), d_r, diamond_col)
-		_draw_diamond(ci, Vector2(inner.position.x + c_inset, inner.end.y - c_inset), d_r, diamond_col)
-	else:
-		var tick: float = maxf(4.0, minf(inner.size.x, inner.size.y) * 0.12)
-		var tick_col: Color = Color("#FFE47A", 0.78 + 0.20 * pulse)
-		var ix0: float = inner.position.x + 2.5
-		var iy0: float = inner.position.y + 2.5
-		var ix1: float = inner.end.x - 2.5
-		var iy1: float = inner.end.y - 2.5
-		ci.draw_line(Vector2(ix0, iy0), Vector2(ix0 + tick, iy0), tick_col, 1.6, true)
-		ci.draw_line(Vector2(ix0, iy0), Vector2(ix0, iy0 + tick), tick_col, 1.6, true)
-		ci.draw_line(Vector2(ix1, iy1), Vector2(ix1 - tick, iy1), tick_col, 1.6, true)
-		ci.draw_line(Vector2(ix1, iy1), Vector2(ix1, iy1 - tick), tick_col, 1.6, true)
-
-	# Centered high-contrast multiplier badge text ("×2" / "×3").
+	# Centered high-contrast frameless multiplier text ("×2" / "×3") with soft ambient glow.
 	var badge_text: String = "×%d" % mult_value
 	var min_dim: float = minf(rect.size.x, rect.size.y)
 	var font_size: int = maxi(14, int(round(min_dim * 0.38)))
 	var center: Vector2 = rect.get_center()
 
-	var halo_col: Color = Color(1.0, 0.28, 0.85, 0.26 + pulse * 0.14) if is_x3 else Color(0.14, 0.88, 1.0, 0.24 + pulse * 0.12)
-	var halo_size: float = min_dim * 0.74
+	var halo_col: Color = Color(1.0, 0.28, 0.85, 0.28 + pulse * 0.14) if is_x3 else Color(0.14, 0.88, 1.0, 0.26 + pulse * 0.12)
+	var halo_size: float = min_dim * 0.78
 	ci.draw_texture_rect(
 		_soft_glow_texture,
 		Rect2(center - Vector2(halo_size, halo_size) * 0.5, Vector2(halo_size, halo_size)),
@@ -336,7 +296,7 @@ static func draw_ghost_mult_passthrough(
 	var min_dim: float = minf(rect.size.x, rect.size.y)
 	var center: Vector2 = rect.get_center()
 
-	# Soft radiant halo behind the numeral so it shines crisply through frosted ghost glass.
+	# Soft radiant halo behind the frameless numeral so it shines crisply through frosted ghost glass.
 	var halo_col: Color = Color(1.0, 0.34, 0.88, 0.36 + pulse * 0.18) if is_x3 else Color(0.16, 0.92, 1.0, 0.34 + pulse * 0.16)
 	var halo_size: float = min_dim * 0.82
 	ci.draw_texture_rect(
@@ -345,11 +305,6 @@ static func draw_ghost_mult_passthrough(
 		false,
 		halo_col
 	)
-
-	# Crisp luminous inner badge frame accent.
-	var rim_col: Color = Color("#FFE26A").lerp(Color("#FF78EE"), 0.30) if is_x3 else Color("#4EF2FF").lerp(Color("#FFE875"), 0.30)
-	rim_col.a = 0.82 + 0.16 * pulse
-	ci.draw_rect(rect.grow(-4.2), rim_col, false, 1.6, true)
 
 	var font_size: int = maxi(15, int(round(min_dim * 0.39)))
 	var text_fill: Color = Color("#FFF7BD") if is_x3 else Color("#F0FEFF")
@@ -500,7 +455,7 @@ static func draw_target_overlay(
 			)
 
 
-## Draws a crisp glowing multiplier ribbon badge on top of an occupied jewel block
+## Draws a crisp frameless multiplier numeral on top of an occupied jewel block
 ## sitting on an x2/x3 board cell so active multipliers are NEVER obscured.
 static func draw_occupied_mult_badge(
 	ci: CanvasItem,
@@ -510,35 +465,26 @@ static func draw_occupied_mult_badge(
 ) -> void:
 	if ci == null or mult_value < 2 or rect.size.x <= 4.0 or rect.size.y <= 4.0:
 		return
+	_ensure_textures()
 
 	var is_x3: bool = mult_value >= 3
 	var pulse: float = 0.5 + 0.5 * sin(time_sec * 4.4)
 	var min_dim: float = minf(rect.size.x, rect.size.y)
-
-	# Pulsing energy rim around the occupied block so the entire tile feels supercharged.
-	var rim_rect: Rect2 = rect.grow(-clampf(min_dim * 0.05, 1.5, 3.0))
-	var aura_col: Color = Color(1.0, 0.28, 0.88, 0.50 + pulse * 0.32) if is_x3 else Color(0.15, 0.91, 1.0, 0.48 + pulse * 0.30)
-	var edge_col: Color = Color("#FFE266").lerp(Color.WHITE, pulse * 0.30) if is_x3 else Color("#8CF6FF").lerp(Color("#FFE46B"), 0.32)
-	ci.draw_rect(rim_rect, aura_col, false, 3.0, true)
-	ci.draw_rect(rim_rect.grow(-0.8), edge_col, false, 1.4, true)
-
-	# High-contrast dark-obsidian framed pill medallion centered inside the tile.
-	var pill_w: float = clampf(min_dim * 0.64, 24.0, 44.0)
-	var pill_h: float = clampf(min_dim * 0.38, 16.0, 26.0)
 	var center: Vector2 = rect.get_center()
-	var pill_rect: Rect2 = Rect2(center - Vector2(pill_w, pill_h) * 0.5, Vector2(pill_w, pill_h))
 
-	_draw_chamfered_pill(ci, Rect2(pill_rect.position + Vector2(0.0, 1.8), pill_rect.size), Color(0.02, 0.03, 0.09, 0.65), 4.0)
+	var halo_col: Color = Color(1.0, 0.28, 0.88, 0.34 + pulse * 0.16) if is_x3 else Color(0.15, 0.91, 1.0, 0.32 + pulse * 0.14)
+	var halo_size: float = min_dim * 0.76
+	ci.draw_texture_rect(
+		_soft_glow_texture,
+		Rect2(center - Vector2(halo_size, halo_size) * 0.5, Vector2(halo_size, halo_size)),
+		false,
+		halo_col
+	)
 
-	var pill_bg: Color = Color(0.16, 0.04, 0.20, 0.92) if is_x3 else Color(0.04, 0.11, 0.24, 0.92)
-	var pill_rim: Color = Color("#FFD63D") if is_x3 else Color("#2CEBFF")
-	_draw_chamfered_pill(ci, pill_rect, pill_bg, 4.0)
-	_draw_chamfered_pill_outline(ci, pill_rect, pill_rim, 4.0, 1.8)
-
-	var font_size: int = maxi(12, int(round(min_dim * 0.27)))
+	var font_size: int = maxi(14, int(round(min_dim * 0.36)))
 	var text_col: Color = Color("#FFF4A3") if is_x3 else Color("#E8FDFF")
 	var outline_col: Color = Color("#2C0422") if is_x3 else Color("#04192E")
-	_draw_centered_outlined_text(ci, get_badge_font(), center, "×%d" % mult_value, font_size, text_col, outline_col, 3)
+	_draw_centered_outlined_text(ci, get_badge_font(), center, "×%d" % mult_value, font_size, text_col, outline_col, 4)
 
 
 ## Draws unmistakable premium special power-up tiles (pre-baked beveled base + crisp live FX):

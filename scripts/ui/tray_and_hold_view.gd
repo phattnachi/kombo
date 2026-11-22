@@ -1008,16 +1008,12 @@ func _on_drag_overlay_draw() -> void:
 		_draw_floating_piece(_drag_overlay, _return_piece, local_center, cell_s, cur_tilt, 1.0 - eased)
 		return
 
-	# 2. Active lifted dragged piece with Block Blast!-beating tapered glowing silk ribbon trail!
+	# 2. Active lifted dragged piece (clean direct drag without tether line).
 	if _is_dragging and _drag_piece != null:
 		var float_global: Vector2 = _get_floating_piece_center_global()
 		var local_center: Vector2 = inv_xform * float_global
 		var cell_s: float = _get_board_cell_size() * _drag_scale_current
 		var lift_ratio: float = clampf(_drag_lift_current / LIFT_OFFSET_Y, 0.15, 1.0)
-
-		var origin_local: Vector2 = HOLD_RECT.get_center() if _drag_source_type == "hold" else get_slot_rect(clampi(_drag_slot_idx, 0, TRAY_SIZE - 1)).get_center()
-		if origin_local.distance_to(local_center) > 48.0:
-			_draw_drag_silk_ribbon(_drag_overlay, origin_local, local_center, _drag_piece, cell_s)
 
 		_draw_floating_piece(_drag_overlay, _drag_piece, local_center, cell_s, _drag_tilt, lift_ratio)
 

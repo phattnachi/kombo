@@ -590,13 +590,11 @@ func spawn_multiplier_pop(pos: Vector2, mult_value: int) -> void:
 	var tilt: float = _mult_tilt_sign * (8.5 if is_x3 else 7.2)
 	_mult_tilt_sign *= -1.0
 
-	var bg: Color = Color("#9B147C", 0.96) if is_x3 else Color("#0C6A9A", 0.96)
-	var rim: Color = Color("#FFD84D") if is_x3 else Color("#5CEEFF")
 	var fill: Color = Color("#FFF4A8") if is_x3 else Color("#EAFCFF")
 	var fsize: int = 38 if is_x3 else 34
 
 	var resolved_pos: Vector2 = _spawn_popup_internal(
-		pos, "×%d" % clamped_mult, fill, fsize, tilt, bg, rim, 0.0, 0.88, 64.0
+		pos, "×%d" % clamped_mult, fill, fsize, tilt, Color.TRANSPARENT, Color.TRANSPARENT, 0.0, 0.88, 64.0
 	)
 
 	# Radiant plasma starburst ring + 8-point flash locked cleanly behind the badge.

@@ -664,17 +664,22 @@ func _draw_drag_preview(inner_rect: Rect2, cell_size: float, pulse: float) -> vo
 				)
 				_draw_four_point_star(center, star_r, star_r * 0.28, Color(1.0, 1.0, 0.96, 0.95))
 
-	# 4. Highlight any x2/x3 multiplier tiles about to be triggered!
+	# 4. Highlight any x2/x3 multiplier tiles about to be triggered (soft frameless glow)!
+	var mult_glow_tex: ImageTexture = TilePainter.get_soft_glow_texture()
 	for m_entry: Dictionary in _preview_hit_multipliers:
 		var m_pos: Vector2i = m_entry.get("cell", Vector2i(-1, -1)) as Vector2i
 		if m_pos.x < 0 or m_pos.y < 0:
 			continue
 		var m_val: int = int(m_entry.get("value", 2))
-		var m_rect: Rect2 = get_cell_rect(m_pos.y, m_pos.x).grow(-2.0)
+		var m_center: Vector2 = get_cell_rect(m_pos.y, m_pos.x).get_center()
 		var ring_col: Color = Color("#FF6BE8") if m_val >= 3 else Color("#40F0FF")
-		var gold_col: Color = Color("#FFE875")
-		draw_rect(m_rect.grow(1.5), Color(ring_col.r, ring_col.g, ring_col.b, 0.48 + 0.34 * pulse), false, 3.8, true)
-		draw_rect(m_rect, Color(gold_col.r, gold_col.g, gold_col.b, 0.90 + 0.10 * pulse), false, 2.2, true)
+		var bloom_sz: float = cell_size * (1.15 + 0.15 * pulse)
+		draw_texture_rect(
+			mult_glow_tex,
+			Rect2(m_center - Vector2(bloom_sz, bloom_sz) * 0.5, Vector2(bloom_sz, bloom_sz)),
+			false,
+			Color(ring_col.r, ring_col.g, ring_col.b, 0.38 + 0.22 * pulse)
+		)
 
 
 func _draw_line_clear_strip(
