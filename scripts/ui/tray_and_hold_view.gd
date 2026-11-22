@@ -222,67 +222,108 @@ func _ready() -> void:
 	queue_redraw()
 
 
+var _idle_shimmer_accum: float = 0.0
+
+
+func _has_special_piece_in_tray_or_hold() -> bool:
+	if _hold_piece != null and _hold_piece.is_special():
+		return true
+	for i: int in range(TRAY_SIZE):
+		if _tray_pieces[i] != null and _tray_pieces[i].is_special():
+			return true
+	return false
+
+
 func _process(delta: float) -> void:
 	_time += delta
+	var dirty: bool = false
+	var overlay_dirty: bool = false
 
 	# Smooth heat tint blending
 	var target_combo_heat: float = clampf(0.5 + float(_target_combo - 2) * 0.2, 0.0, 1.0) if _target_combo >= 2 else 0.0
 	var target_fever_heat: float = 1.0 if _target_fever else 0.0
 	var heat_step: float = 1.0 - exp(-7.0 * delta)
-	_heat_combo = lerpf(_heat_combo, target_combo_heat, heat_step)
-	_heat_fever = lerpf(_heat_fever, target_fever_heat, heat_step)
+	if absf(_heat_combo - target_combo_heat) > 0.002:
+		_heat_combo = lerpf(_heat_combo, target_combo_heat, heat_step)
+		dirty = true
+	else:
+		_heat_combo = target_combo_heat
+	if absf(_heat_fever - target_fever_heat) > 0.002:
+		_heat_fever = lerpf(_heat_fever, target_fever_heat, heat_step)
+		dirty = true
+	else:
+		_heat_fever = target_fever_heat
 
 	# Advance staggered tray refill pop-in springs
 	for i: int in range(TRAY_SIZE):
 		if _refill_timers[i] >= 0.0:
+			dirty = true
 			_refill_timers[i] += delta
 			var finish_time: float = float(i) * REFILL_STAGGER + REFILL_DURATION
 			if _refill_timers[i] >= finish_time:
 				_refill_timers[i] = -1.0
 
 		if _special_award_timers[i] >= 0.0:
+			dirty = true
 			_special_award_timers[i] += delta
 			if _special_award_timers[i] >= SPECIAL_AWARD_DURATION:
 				_special_award_timers[i] = -1.0
 
 	# Hold Dock hover glow & scale interpolation
 	var hover_target: float = 1.0 if (_is_dragging and _drag_hovering_hold and _drag_source_type == "tray" and not _hold_used_this_turn) else 0.0
-	_hold_hover_blend = lerpf(_hold_hover_blend, hover_target, 1.0 - exp(-18.0 * delta))
+	if absf(_hold_hover_blend - hover_target) > 0.002:
+		_hold_hover_blend = lerpf(_hold_hover_blend, hover_target, 1.0 - exp(-18.0 * delta))
+		dirty = true
+	else:
+		_hold_hover_blend = hover_target
 
 	if _hold_tap_pulse > 0.0:
 		_hold_tap_pulse = maxf(0.0, _hold_tap_pulse - delta * 4.5)
+		dirty = true
 
-	# Active drag smoothing (lift, full-size scale-up, velocity Balatro sway tilt)
-	if _is_dragging and not _programmatic_drag:
-		var safe_dt: float = maxf(delta, 0.001)
-		var inst_vel_x: float = (_drag_pointer_global.x - _drag_prev_pointer_x) / safe_dt
-		_drag_prev_pointer_x = _drag_pointer_global.x
-		_drag_vel_x = lerpf(_drag_vel_x, inst_vel_x, 1.0 - exp(-18.0 * delta))
+	# Active drag smoothing (lift, full-size scale-up, velocity sway tilt)
+	if _is_dragging:
+		dirty = true
+		overlay_dirty = true
+		if not _programmatic_drag:
+			var safe_dt: float = maxf(delta, 0.001)
+			var inst_vel_x: float = (_drag_pointer_global.x - _drag_prev_pointer_x) / safe_dt
+			_drag_prev_pointer_x = _drag_pointer_global.x
+			_drag_vel_x = lerpf(_drag_vel_x, inst_vel_x, 1.0 - exp(-18.0 * delta))
 
-		var target_tilt: float = clampf(_drag_vel_x * SWAY_VEL_FACTOR, -MAX_SWAY_RADIANS, MAX_SWAY_RADIANS)
-		_drag_tilt = lerpf(_drag_tilt, target_tilt, 1.0 - exp(-16.0 * delta))
+			var target_tilt: float = clampf(_drag_vel_x * SWAY_VEL_FACTOR, -MAX_SWAY_RADIANS, MAX_SWAY_RADIANS)
+			_drag_tilt = lerpf(_drag_tilt, target_tilt, 1.0 - exp(-16.0 * delta))
 
-		var hovering_valid_hold: bool = _drag_hovering_hold and _drag_source_type == "tray" and not _hold_used_this_turn
-		var target_lift: float = 6.0 if hovering_valid_hold else LIFT_OFFSET_Y
-		var target_scale: float = 0.56 if hovering_valid_hold else 1.0
+			var hovering_valid_hold: bool = _drag_hovering_hold and _drag_source_type == "tray" and not _hold_used_this_turn
+			var target_lift: float = 6.0 if hovering_valid_hold else LIFT_OFFSET_Y
+			var target_scale: float = 0.56 if hovering_valid_hold else 1.0
 
-		var lift_before: float = _drag_lift_current
-		_drag_lift_current = lerpf(_drag_lift_current, target_lift, 1.0 - exp(-22.0 * delta))
-		_drag_scale_current = lerpf(_drag_scale_current, target_scale, 1.0 - exp(-24.0 * delta))
+			var lift_before: float = _drag_lift_current
+			_drag_lift_current = lerpf(_drag_lift_current, target_lift, 1.0 - exp(-22.0 * delta))
+			_drag_scale_current = lerpf(_drag_scale_current, target_scale, 1.0 - exp(-24.0 * delta))
 
-		# Keep board preview smoothly synced while the lift eases upward right after pickup
-		if absf(_drag_lift_current - lift_before) > 0.35 and _drag_piece != null:
-			drag_moved.emit(_get_floating_piece_center_global(), _drag_source_type, _drag_slot_idx, _drag_piece)
+			# Keep board preview smoothly synced while the lift eases upward right after pickup
+			if absf(_drag_lift_current - lift_before) > 0.35 and _drag_piece != null:
+				drag_moved.emit(_get_floating_piece_center_global(), _drag_source_type, _drag_slot_idx, _drag_piece)
 
 	# Return spring animation after cancelled drag
 	if _return_active:
+		dirty = true
+		overlay_dirty = true
 		_return_elapsed += delta
 		if _return_elapsed >= RETURN_ANIM_DURATION:
 			_return_active = false
 			_return_piece = null
 
-	queue_redraw()
-	if _drag_overlay != null:
+	if not dirty and (_has_special_piece_in_tray_or_hold() or _target_fever):
+		_idle_shimmer_accum += delta
+		if _idle_shimmer_accum >= 0.055:
+			_idle_shimmer_accum = 0.0
+			dirty = true
+
+	if dirty:
+		queue_redraw()
+	if overlay_dirty and _drag_overlay != null:
 		_drag_overlay.queue_redraw()
 
 

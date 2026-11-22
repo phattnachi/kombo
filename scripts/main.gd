@@ -171,17 +171,27 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	var dt := minf(delta, 0.05)
 
-	# Smoothly transition living Balatro swirl background heat & speed.
+	# Smoothly transition living swirl background heat & speed (only push shader uniforms when changed).
+	var prev_heat := _bg_heat
+	var prev_speed := _bg_speed
+	var prev_pulse := _bg_pulse
 	var heat_rate := 5.5 if _bg_heat_target > _bg_heat else 2.8
 	_bg_heat = lerpf(_bg_heat, _bg_heat_target, clampf(dt * heat_rate, 0.0, 1.0))
+	if absf(_bg_heat - _bg_heat_target) < 0.001:
+		_bg_heat = _bg_heat_target
 	_bg_speed = lerpf(_bg_speed, _bg_speed_target, clampf(dt * 4.2, 0.0, 1.0))
+	if absf(_bg_speed - _bg_speed_target) < 0.001:
+		_bg_speed = _bg_speed_target
 	if _bg_pulse > 0.0:
 		_bg_pulse = maxf(0.0, _bg_pulse - dt * 2.6)
 
 	if swirl_mat != null:
-		swirl_mat.set_shader_parameter("heat", _bg_heat)
-		swirl_mat.set_shader_parameter("speed", _bg_speed)
-		swirl_mat.set_shader_parameter("pulse", _bg_pulse)
+		if absf(_bg_heat - prev_heat) > 0.0005:
+			swirl_mat.set_shader_parameter("heat", _bg_heat)
+		if absf(_bg_speed - prev_speed) > 0.0005:
+			swirl_mat.set_shader_parameter("speed", _bg_speed)
+		if absf(_bg_pulse - prev_pulse) > 0.0005:
+			swirl_mat.set_shader_parameter("pulse", _bg_pulse)
 
 	# Apply trauma screen shake to playfield without persistent drift.
 	if playfield_root != null and vfx_layer != null:

@@ -88,8 +88,12 @@ func _ready() -> void:
 	queue_redraw()
 
 
+var _shimmer_accum: float = 0.0
+
+
 func _process(delta: float) -> void:
 	_time += delta
+	var dirty: bool = false
 
 	var target_combo_heat: float = 0.0
 	if _target_combo >= 2:
@@ -97,13 +101,24 @@ func _process(delta: float) -> void:
 	var target_fever_heat: float = 1.0 if _target_fever else 0.0
 
 	var blend_step: float = 1.0 - exp(-7.5 * delta)
-	_combo_heat = lerpf(_combo_heat, target_combo_heat, blend_step)
-	_fever_heat = lerpf(_fever_heat, target_fever_heat, blend_step)
+	if absf(_combo_heat - target_combo_heat) > 0.002:
+		_combo_heat = lerpf(_combo_heat, target_combo_heat, blend_step)
+		dirty = true
+	else:
+		_combo_heat = target_combo_heat
+
+	if absf(_fever_heat - target_fever_heat) > 0.002:
+		_fever_heat = lerpf(_fever_heat, target_fever_heat, blend_step)
+		dirty = true
+	else:
+		_fever_heat = target_fever_heat
 
 	if _clear_flash > 0.0:
 		_clear_flash = maxf(0.0, _clear_flash - delta * 4.2)
+		dirty = true
 
 	if not _landing_anims.is_empty():
+		dirty = true
 		var expired: Array[Vector2i] = []
 		for cell_key in _landing_anims.keys():
 			var cell_pos: Vector2i = cell_key as Vector2i
@@ -115,7 +130,18 @@ func _process(delta: float) -> void:
 		for cell_pos: Vector2i in expired:
 			_landing_anims.erase(cell_pos)
 
-	queue_redraw()
+	if _preview_active:
+		dirty = true
+	else:
+		# Throttle ambient idle multiplier/frame shimmer to 15 Hz so CPU stays cool while thinking!
+		_shimmer_accum += delta
+		var interval: float = 0.045 if (_target_fever or _target_combo >= 2) else 0.075
+		if _shimmer_accum >= interval:
+			_shimmer_accum = 0.0
+			dirty = true
+
+	if dirty:
+		queue_redraw()
 
 
 ## Binds the BoardState model and triggers an immediate redraw.

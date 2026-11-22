@@ -34,11 +34,11 @@ float value_noise(vec2 p) {
 
 float flame_fbm(vec2 p) {
 	float v = 0.0;
-	float amp = 0.54;
+	float amp = 0.62;
 	mat2 rot = mat2(vec2(0.80, -0.60), vec2(0.60, 0.80));
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0; i < 2; i++) {
 		v += amp * value_noise(p);
-		p = rot * p * 2.06 + vec2(2.3, 9.1);
+		p = rot * p * 2.12 + vec2(2.3, 9.1);
 		amp *= 0.48;
 	}
 	return v;

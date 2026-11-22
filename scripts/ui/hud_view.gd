@@ -249,9 +249,29 @@ func _process(delta: float) -> void:
 		_mult_flame_intensity = _mult_flame_target
 	_apply_flame_uniforms()
 
-	queue_redraw()
-	if _fg_layer != null:
-		_fg_layer.queue_redraw()
+	var is_animating: bool = (
+		absf(_displayed_score - float(_target_score)) > 0.5
+		or absf(_displayed_high_score - float(_target_high_score)) > 0.5
+		or absf(_displayed_fever_charge - fever_target) > 0.002
+		or absf(_score_scale - 1.0) > 0.002
+		or absf(_score_rot) > 0.002
+		or absf(_crown_scale - 1.0) > 0.002
+		or absf(_chips_scale - 1.0) > 0.002
+		or absf(_mult_scale - 1.0) > 0.002
+		or absf(_x_scale - 1.0) > 0.002
+		or absf(_combo_badge_scale - badge_target) > 0.002
+		or _score_flash > 0.001
+		or _chips_flash > 0.001
+		or _mult_flash > 0.001
+		or _combo_badge_wobble > 0.001
+		or _fever_ignition_flash > 0.001
+		or _orb_halo_pulse > 0.001
+	)
+	var needs_shimmer: bool = _fever_active or _combo_streak >= 2 or _mode_badge_urgent or _is_new_high_score
+	if is_animating or (needs_shimmer and int(_time_sec * 20.0) != int((_time_sec - dt) * 20.0)):
+		queue_redraw()
+		if _fg_layer != null:
+			_fg_layer.queue_redraw()
 
 
 # ==============================================================================
