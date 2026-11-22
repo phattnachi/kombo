@@ -804,7 +804,7 @@ func spawn_score_orbs(
 			score_orb_arrived.emit(total_points)
 		return
 
-	var orb_count: int = clampi(maxi(from_positions.size(), 6 + int(total_points / 85)), 7, 18)
+	var orb_count: int = clampi(maxi(from_positions.size(), 6 + int(total_points / 550)), 7, 18)
 	var safe_points: int = maxi(0, total_points)
 	var base_chunk: int = safe_points / orb_count
 	var remainder: int = safe_points % orb_count

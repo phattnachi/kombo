@@ -5,8 +5,8 @@ extends RefCounted
 ## Populates each 8x8 stage with tactical Crystal Gems, Cursed Padlocks, and 2-HP Frozen
 ## Ice blocks plus escalating stage base score multipliers (x1.0 -> x1.25 -> x1.5 -> ...).
 
-const STAGE_CLEAR_BONUS_PER_STAGE: int = 500
-const PADLOCK_SHATTER_BONUS: int = 75
+const STAGE_CLEAR_BONUS_PER_STAGE: int = 3000
+const PADLOCK_SHATTER_BONUS: int = 450
 const MAX_STAGE_MULT: float = 4.0
 
 ## Ten handcrafted architectural target layouts (8..14 cells, zero full rows/cols).

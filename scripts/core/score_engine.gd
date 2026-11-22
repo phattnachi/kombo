@@ -3,13 +3,13 @@ extends RefCounted
 
 ## Balatro-inspired Kombo scoring engine: base_chips * (combo_mult * tile_mult * fever_mult).
 
-const CHIPS_PER_PLACED_CELL := 5
-const CHIPS_PER_LINE := 100
-const CHIPS_PER_BLAST_CELL := 15
+const CHIPS_PER_PLACED_CELL := 25
+const CHIPS_PER_LINE := 600
+const CHIPS_PER_BLAST_CELL := 90
 
-const MULTI_LINE_BONUS_2 := 50
-const MULTI_LINE_BONUS_3 := 150
-const MULTI_LINE_BONUS_4_PLUS := 300
+const MULTI_LINE_BONUS_2 := 400
+const MULTI_LINE_BONUS_3 := 1200
+const MULTI_LINE_BONUS_4_PLUS := 2600
 
 const COMBO_MULT_STEP := 0.5
 const COMBO_GRACE_MAX := 3
@@ -75,9 +75,12 @@ func is_new_personal_best() -> bool:
 
 
 func get_current_combo_mult() -> float:
-	if combo_streak <= 0:
+	if combo_streak <= 1:
 		return 1.0
-	return 1.0 + float(combo_streak - 1) * COMBO_MULT_STEP
+	if combo_streak <= 5:
+		return 1.0 + float(combo_streak - 1) * COMBO_MULT_STEP
+	var over := float(combo_streak - 5)
+	return 3.0 + over * 0.75 + over * over * 0.25
 
 
 func get_current_fever_mult() -> float:

@@ -430,25 +430,25 @@ func apply_move_result(result: Dictionary) -> void:
 		_gain_burst_timer = 1.05 if did_clear else 0.55
 		_gain_burst_scale = 1.42 if did_clear else 1.20
 
-		var t_mag := clampf((float(points_earned) - 10.0) / 900.0, 0.0, 1.0)
-		var punch := lerpf(1.16 if not did_clear else 1.28, 1.54, pow(t_mag, 0.55))
+		var t_mag := clampf((float(points_earned) - 60.0) / 8000.0, 0.0, 1.0)
+		var punch := lerpf(1.16 if not did_clear else 1.28, 1.56, pow(t_mag, 0.50))
 		_score_scale = maxf(_score_scale, punch)
-		_score_scale_vel = maxf(_score_scale_vel, (1.8 if not did_clear else 2.8) + t_mag * 3.2)
+		_score_scale_vel = maxf(_score_scale_vel, (1.8 if not did_clear else 2.8) + t_mag * 3.4)
 		_score_flash = clampf((0.55 if not did_clear else 0.78) + t_mag * 0.45, 0.55, 1.0)
 		_score_tilt_dir = -_score_tilt_dir
-		var tilt_deg := lerpf(1.4 if not did_clear else 2.6, 5.8, t_mag)
+		var tilt_deg := lerpf(1.4 if not did_clear else 2.6, 6.0, t_mag)
 		_score_rot = deg_to_rad(tilt_deg) * _score_tilt_dir
 		_gain_burst_tilt = -_score_rot * 0.85
 
 	# Tactile equation pill punches.
 	if base_chips > 0:
-		var chip_boost := clampf(float(base_chips) / 320.0, 0.0, 1.0)
+		var chip_boost := clampf(float(base_chips) / 2000.0, 0.0, 1.0)
 		_chips_scale = maxf(_chips_scale, lerpf(1.12, 1.30, chip_boost))
 		_chips_rot = deg_to_rad(-2.6 - chip_boost * 2.4)
 		_chips_flash = clampf(0.55 + chip_boost * 0.45, 0.55, 1.0)
 
 	if total_mult > 1.01 or _fever_active:
-		var mult_boost := clampf((total_mult - 1.0) / 7.0, 0.0, 1.0)
+		var mult_boost := clampf((total_mult - 1.0) / 14.0, 0.0, 1.0)
 		_mult_scale = maxf(_mult_scale, lerpf(1.18, 1.38, mult_boost))
 		_mult_rot = deg_to_rad(2.8 + mult_boost * 3.0)
 		_mult_flash = clampf(0.65 + mult_boost * 0.35, 0.65, 1.0)
@@ -480,7 +480,7 @@ func trigger_score_orb_impact(points_chunk: int) -> void:
 			if _is_new_high_score and _displayed_high_score < _displayed_score:
 				_displayed_high_score = minf(float(_target_high_score), _displayed_score)
 
-	var chunk_mag := clampf(float(chunk) / 140.0, 0.0, 1.0)
+	var chunk_mag := clampf(float(chunk) / 900.0, 0.0, 1.0)
 	var is_final_slam := _pending_orb_points <= 1.0 and absf(float(_target_score) - _displayed_score) <= float(maxi(chunk, 25))
 	var impact_scale := lerpf(1.22, 1.46, chunk_mag) + (0.10 if is_final_slam else 0.0)
 	_score_scale = maxf(_score_scale, impact_scale)
@@ -1371,18 +1371,18 @@ func _draw_hero_total_score(ci: CanvasItem) -> void:
 	if _gain_burst_timer > 0.01 and _gain_burst_value > 0:
 		var gain_alpha := clampf(_gain_burst_timer / 0.24, 0.0, 1.0)
 		var gain_text := "+%s" % format_comma_int(_gain_burst_value)
-		if _gain_burst_value >= 300:
+		if _gain_burst_value >= 1500:
 			gain_text += "!"
 		var half_score_w := minf(measured_w, max_w) * 0.5 * _score_scale
 		var gain_pos := Vector2(
-			clampf(center.x + half_score_w + 46.0, 342.0, 408.0),
+			clampf(center.x + half_score_w + 48.0, 342.0, 412.0),
 			center.y - 4.0 - (1.0 - clampf(_gain_burst_timer, 0.0, 1.0)) * 10.0
 		)
-		var is_big_gain := _gain_burst_value >= 150 or _fever_active
+		var is_big_gain := _gain_burst_value >= 900 or _fever_active
 		var gain_fill := (Color("#FFE854") if is_big_gain else Color("#7CF6FF")).lerp(Color.WHITE, clampf((_gain_burst_scale - 1.0) * 1.8, 0.0, 0.75))
 		gain_fill.a = gain_alpha
 		var gain_out := Color("#3D1200", gain_alpha) if is_big_gain else Color("#052242", gain_alpha)
-		var gain_fsize := clampi(20 + int(float(_gain_burst_value) / 220.0), 20, 28)
+		var gain_fsize := clampi(20 + int(float(_gain_burst_value) / 1400.0), 18, 26)
 		_draw_soft_glow(ci, gain_pos, Vector2(44.0, 18.0), Color(gain_fill.r, gain_fill.g, gain_fill.b, 0.34 * gain_alpha))
 		ci.draw_set_transform(gain_pos, _gain_burst_tilt, Vector2(_gain_burst_scale, _gain_burst_scale))
 		_draw_centered_outlined_text(ci, _font_extrabold, Vector2.ZERO, gain_text, gain_fsize, gain_fill, gain_out, 5, 2.0)

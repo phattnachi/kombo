@@ -1200,9 +1200,9 @@ func _on_move_resolved(result: Dictionary) -> void:
 			_vibrate(clampi(22 + lines_cleared * 6, 22, 40))
 
 		# Bold Balatro score pop & flying orbs converging on top Hero Score!
-		var pop_size := clampi(32 + int(float(points_earned) / 110.0), 32, 46)
+		var pop_size := clampi(32 + int(float(points_earned) / 700.0), 32, 46)
 		var pop_bg := Color("#E83B28") if fever_active else Color("#1464D8")
-		var pop_text := "+%s!" % HudView.format_comma_int(points_earned) if points_earned >= 200 else "+%s" % HudView.format_comma_int(points_earned)
+		var pop_text := "+%s!" % HudView.format_comma_int(points_earned) if points_earned >= 1200 else "+%s" % HudView.format_comma_int(points_earned)
 		vfx_layer.spawn_floating_text(
 			centroid + Vector2(0.0, -18.0),
 			pop_text,

@@ -192,8 +192,8 @@ func _test_placement_and_collision() -> void:
 	var res := gc.place_from_tray(0, Vector2i(0, 0))
 	_assert_eq(res["valid"], true, "Valid placement succeeds")
 	_assert_eq((res["placed_cells"] as Array).size(), 4, "Placed 4 cells")
-	_assert_eq(res["base_chips"], 20, "4 cells * 5 = 20 base chips")
-	_assert_eq(res["points_earned"], 20, "20 points earned on non-clearing placement")
+	_assert_eq(res["base_chips"], 100, "4 cells * 25 = 100 base chips")
+	_assert_eq(res["points_earned"], 100, "100 points earned on non-clearing placement")
 	_assert_eq(gc.board.get_color_id(1, 1), 3, "Placed cell stores Emerald color_id")
 	_assert_eq(gc.board.get_multiplier(1, 1), 2, "Covered multiplier tile persists until cleared")
 	_assert_true(gc.tray[0] == null, "Used tray slot becomes null")
@@ -221,8 +221,8 @@ func _test_single_row_and_col_clear() -> void:
 	_assert_eq(r1["lines_cleared"], 1, "Cleared 1 line")
 	_assert_eq(r1["cleared_rows"], [3] as Array[int], "Row 3 cleared")
 	_assert_eq(r1["cleared_cols"], [] as Array[int], "No col cleared")
-	_assert_eq(r1["base_chips"], 110, "2*5 placement + 100 line = 110 base chips")
-	_assert_eq(r1["points_earned"], 110, "Combo 1 = x1.0 -> 110 pts")
+	_assert_eq(r1["base_chips"], 650, "2*25 placement + 600 line = 650 base chips")
+	_assert_eq(r1["points_earned"], 650, "Combo 1 = x1.0 -> 650 pts")
 	_assert_eq(r1["combo_grace_left"], ScoreEngine.COMBO_GRACE_MAX, "Grace set to 3 on clear")
 	_assert_true(not gc.board.is_occupied(0, 3), "Row 3 is empty after clear")
 	_assert_true(gc.board.is_occupied(0, 0), "Other row untouched")
@@ -235,7 +235,7 @@ func _test_single_row_and_col_clear() -> void:
 	_assert_eq(r2["cleared_cols"], [2] as Array[int], "Column 2 cleared")
 	_assert_eq(r2["combo_streak"], 2, "Second consecutive clear increments combo to 2")
 	_assert_approx(r2["combo_mult"], 1.5, 0.001, "Combo 2 mult is x1.5")
-	_assert_eq(r2["points_earned"], 165, "round(110 * 1.5) = 165")
+	_assert_eq(r2["points_earned"], 975, "round(650 * 1.5) = 975")
 	_assert_true(not gc.board.is_occupied(2, 0), "Col 2 is empty after clear")
 
 
@@ -254,7 +254,7 @@ func _test_simultaneous_multi_line_clear() -> void:
 
 	var r2 := gc.place_from_tray(1, Vector2i(4, 4))
 	_assert_eq(r2["lines_cleared"], 2, "Cleared 2 lines (row 4 + col 4)")
-	_assert_eq(r2["base_chips"], 255, "5 placement + 200 lines + 50 multi-line bonus = 255")
+	_assert_eq(r2["base_chips"], 1625, "25 placement + 1200 lines + 400 multi-line bonus = 1625")
 	_assert_eq(r2["awarded_special"], PieceCatalog.SPECIAL_BOMB, "2-line clear awards BOMB")
 	_assert_eq(r2["awarded_slot"], 1, "Bomb spawned right into emptied slot 1")
 	_assert_eq(r2["tray_refilled"], false, "Tray must not refill while newly awarded Bomb occupies slot 1")
@@ -271,12 +271,12 @@ func _test_simultaneous_multi_line_clear() -> void:
 
 	var r3 := gc.place_from_tray(0, Vector2i(2, 2))
 	_assert_eq(r3["lines_cleared"], 3, "Cleared 3 lines (rows 2,3 + col 2)")
-	_assert_eq(r3["line_chips"], 450, "3*100 + 150 bonus = 450 line chips")
+	_assert_eq(r3["line_chips"], 3000, "3*600 + 1200 bonus = 3000 line chips")
 	_assert_eq(r3["awarded_special"], PieceCatalog.SPECIAL_LIGHTNING, "3-line clear awards LIGHTNING")
 	_assert_eq(r3["awarded_slot"], 0, "Lightning spawned right into emptied slot 0")
 	_assert_true(gc.tray[0] != null and gc.tray[0].special_type == PieceCatalog.SPECIAL_LIGHTNING, "Slot 0 holds Lightning")
 
-	# 4-line clear -> +300 multi-line bonus + Lightning
+	# 4-line clear -> +2600 multi-line bonus + Lightning
 	gc.board.clear_board()
 	_fill_row_except(gc.board, 5, [5, 6], 1)
 	_fill_row_except(gc.board, 6, [5, 6], 1)
@@ -286,7 +286,7 @@ func _test_simultaneous_multi_line_clear() -> void:
 
 	var r4 := gc.place_from_tray(2, Vector2i(5, 5))
 	_assert_eq(r4["lines_cleared"], 4, "Cleared 4 lines simultaneously")
-	_assert_eq(r4["line_chips"], 700, "4*100 + 300 bonus = 700 line chips")
+	_assert_eq(r4["line_chips"], 5000, "4*600 + 2600 bonus = 5000 line chips")
 	_assert_eq(r4["awarded_special"], PieceCatalog.SPECIAL_LIGHTNING, "4-line clear awards LIGHTNING")
 
 
@@ -307,8 +307,8 @@ func _test_bomb_detonation() -> void:
 	_assert_eq((r_empty["cleared_cells"] as Array).size(), 1, "Bomb still consumes itself off board")
 	_assert_true(not gc.board.is_occupied(3, 3), "Bomb origin cell empty after detonation")
 	_assert_eq(r_empty["blast_chips"], 0, "0 blast chips on empty space")
-	_assert_eq(r_empty["base_chips"], 5, "Only 5 placement chips on empty space")
-	_assert_eq(r_empty["points_earned"], 5, "Only 5 pts earned on empty-space bomb")
+	_assert_eq(r_empty["base_chips"], 25, "Only 25 placement chips on empty space")
+	_assert_eq(r_empty["points_earned"], 25, "Only 25 pts earned on empty-space bomb")
 	_assert_eq(r_empty["combo_streak"], 0, "Empty-space bomb does NOT increment combo")
 	_assert_approx(r_empty["fever_charge"], 0.0, 0.001, "Empty-space bomb does NOT charge FEVER")
 
@@ -321,7 +321,7 @@ func _test_bomb_detonation() -> void:
 	_assert_eq((r_mult_empty["blast_cells"] as Array).size(), 0, "Origin excluded from blast_cells")
 	_assert_eq((r_mult_empty["hit_multipliers"] as Array).size(), 0, "Empty-space Bomb fizzle does NOT consume uncovered origin x2")
 	_assert_approx(r_mult_empty["tile_mult"], 1.0, 0.001, "No x2 farming on empty-space Bomb")
-	_assert_eq(r_mult_empty["points_earned"], 5, "Only 5 placement chips on empty-space Bomb over x2")
+	_assert_eq(r_mult_empty["points_earned"], 25, "Only 25 placement chips on empty-space Bomb over x2")
 	_assert_eq(r_mult_empty["combo_streak"], 0, "Empty-space Bomb over x2 does NOT increment combo")
 	_assert_approx(r_mult_empty["fever_charge"], 0.0, 0.001, "Empty-space Bomb over x2 does NOT charge FEVER")
 	_assert_true(not gc.board.is_occupied(3, 3), "Bomb still consumed itself off board")
@@ -335,7 +335,7 @@ func _test_bomb_detonation() -> void:
 	_assert_eq((r_mult_real["blast_cells"] as Array).size(), 1, "1 pre-existing adjacent block blasted")
 	_assert_eq((r_mult_real["hit_multipliers"] as Array).size(), 1, "Origin x2 triggered when blasting real block")
 	_assert_approx(r_mult_real["tile_mult"], 2.0, 0.001, "Origin x2 multiplier applied")
-	_assert_eq(r_mult_real["points_earned"], 40, "(5 placement + 15 blast) * x2 = 40 pts")
+	_assert_eq(r_mult_real["points_earned"], 230, "(25 placement + 90 blast) * x2 = 230 pts")
 	_assert_eq(r_mult_real["combo_streak"], 1, "Real blast increments combo")
 	_assert_eq(gc.board.get_multiplier(3, 3), 1, "Origin x2 consumed on real blast")
 
@@ -358,10 +358,10 @@ func _test_bomb_detonation() -> void:
 	_assert_eq(r1["special_triggered"], PieceCatalog.SPECIAL_BOMB, "Bomb triggered")
 	_assert_eq((r1["blast_cells"] as Array).size(), 4, "Exactly 4 pre-existing neighbors in blast_cells (origin excluded)")
 	_assert_eq((r1["cleared_cells"] as Array).size(), 5, "4 neighbors + origin in cleared_cells")
-	_assert_eq(r1["blast_chips"], 60, "4 * 15 = 60 blast chips")
-	_assert_eq(r1["base_chips"], 65, "5 placement + 60 blast = 65 base chips")
+	_assert_eq(r1["blast_chips"], 360, "4 * 90 = 360 blast chips")
+	_assert_eq(r1["base_chips"], 385, "25 placement + 360 blast = 385 base chips")
 	_assert_approx(r1["tile_mult"], 2.0, 0.001, "Covered x2 inside 3x3 triggered")
-	_assert_eq(r1["points_earned"], 130, "65 * 2.0 = 130 pts")
+	_assert_eq(r1["points_earned"], 770, "385 * 2.0 = 770 pts")
 	_assert_eq(r1["combo_streak"], 1, "Destroying real blocks advances combo streak")
 	_assert_true(not gc.board.is_occupied(3, 3), "Bomb cell itself cleared")
 	_assert_true(not gc.board.is_occupied(2, 2), "3x3 neighbor cleared")
@@ -404,7 +404,7 @@ func _test_lightning_cross_clear() -> void:
 	var r_empty := gc.place_from_tray(0, Vector2i(4, 2))
 	_assert_eq((r_empty["blast_cells"] as Array).size(), 0, "Empty-space Lightning has 0 blast_cells")
 	_assert_eq(r_empty["blast_chips"], 0, "0 blast chips on empty space")
-	_assert_eq(r_empty["points_earned"], 5, "Only 5 placement chips")
+	_assert_eq(r_empty["points_earned"], 25, "Only 25 placement chips")
 	_assert_eq(r_empty["combo_streak"], 0, "Empty-space Lightning does NOT increment combo")
 	_assert_approx(r_empty["fever_charge"], 0.0, 0.001, "Empty-space Lightning does NOT charge FEVER")
 	_assert_true(not gc.board.is_occupied(4, 2), "Lightning consumed itself off board")
@@ -429,8 +429,8 @@ func _test_lightning_cross_clear() -> void:
 	_assert_eq(res["lines_cleared"], 0, "Partial row/col does not falsely trigger free Bomb award")
 	_assert_eq(res["awarded_special"], PieceCatalog.SPECIAL_NORMAL, "No infinite special loop")
 	_assert_approx(res["tile_mult"], 3.0, 0.001, "x3 multiplier on col 4 triggered by Lightning")
-	_assert_eq(res["base_chips"], 5 + 6 * 15, "5 placement + 90 blast = 95 base chips")
-	_assert_eq(res["points_earned"], 285, "95 * 3.0 = 285 pts")
+	_assert_eq(res["base_chips"], 25 + 6 * 90, "25 placement + 540 blast = 565 base chips")
+	_assert_eq(res["points_earned"], 1695, "565 * 3.0 = 1695 pts")
 	_assert_eq(res["combo_streak"], 1, "Destroying real blocks increments combo")
 	_assert_true(not gc.board.is_occupied(0, 2) and not gc.board.is_occupied(4, 7), "Row 2 & Col 4 wiped clean")
 	_assert_true(gc.board.is_occupied(0, 0), "Off-cross cell untouched")
@@ -586,8 +586,8 @@ func _test_multiplier_tiles() -> void:
 	_assert_eq(res["lines_cleared"], 1, "Row 5 cleared")
 	_assert_eq((res["hit_multipliers"] as Array).size(), 2, "Hit both x2 and x3 multipliers")
 	_assert_approx(res["tile_mult"], 6.0, 0.001, "x2 * x3 stacks multiplicatively to x6.0")
-	_assert_eq(res["base_chips"], 105, "5 placement + 100 line = 105")
-	_assert_eq(res["points_earned"], 630, "105 * 6.0 = 630 pts")
+	_assert_eq(res["base_chips"], 625, "25 placement + 600 line = 625")
+	_assert_eq(res["points_earned"], 3750, "625 * 6.0 = 3750 pts")
 	_assert_eq(gc.board.get_multiplier(2, 5), 1, "Consumed x2 multiplier reset to 1")
 	_assert_eq(gc.board.get_multiplier(6, 5), 1, "Consumed x3 multiplier reset to 1")
 
@@ -706,7 +706,7 @@ func _test_fever_mode() -> void:
 	_assert_approx(m2["fever_charge"], 0.68, 0.001, "Move 2 fever charge = 0.68")
 	_assert_eq(m2["fever_active"], false, "Move 2 not yet in FEVER")
 
-	# Move 3: base=105, combo=3 (x2.0), tile=x2.0, fever=x2.0 -> total_mult=8.0 -> 840 pts!
+	# Move 3: base=625, combo=3 (x2.0), tile=x2.0, fever=x2.0 -> total_mult=8.0 -> 5000 pts!
 	gc.board.clear_board()
 	_fill_row_except(gc.board, 0, [0], 1)
 	gc.board.set_multiplier(4, 0, 2)
@@ -717,7 +717,7 @@ func _test_fever_mode() -> void:
 	_assert_approx(m3["fever_charge"], 1.0, 0.001, "FEVER charge is 1.0 on ignition")
 	_assert_approx(m3["fever_mult"], 2.0, 0.001, "FEVER adds x2.0 multiplier")
 	_assert_approx(m3["total_mult"], 8.0, 0.001, "combo(2.0)*tile(2.0)*fever(2.0) = 8.0")
-	_assert_eq(m3["points_earned"], 840, "105 * 8.0 = 840 pts")
+	_assert_eq(m3["points_earned"], 5000, "625 * 8.0 = 5000 pts")
 
 	# Clear while in FEVER: 5 -> 6 (and next clear stays capped at 6!)
 	gc.board.clear_board()
@@ -941,56 +941,56 @@ func _test_high_score_and_persistence() -> void:
 	gc1.tray[0] = PieceCatalog.create_piece_by_id("sq2", 0)
 	gc1.tray[1] = PieceCatalog.create_piece_by_id("dot_1x1", 1)
 	gc1.tray[2] = PieceCatalog.create_piece_by_id("dot_1x1", 2)
-	var m_low := gc1.place_from_tray(0, Vector2i(0, 0)) # 20 pts
+	var m_low := gc1.place_from_tray(0, Vector2i(0, 0)) # 100 pts
 	_assert_eq(m_low["is_new_high_score"], true, "First run score > 0 sets is_new_high_score=true")
 	_assert_eq(m_low["just_beat_high_score"], false, "First run from 0 does NOT fire just_beat_high_score")
-	_assert_eq(sm1.save_count, 0, "Low score (<500) does NOT hammer disk")
+	_assert_eq(sm1.save_count, 0, "Low score (<2500) does NOT hammer disk")
 
-	# Jump over 500-point milestone in one x6 clear (630 pts -> total 650)
+	# Jump over 2500-point milestone in one x6 clear (3750 pts -> total 3850)
 	gc1.board.clear_board()
 	_fill_row_except(gc1.board, 2, [0], 1)
 	gc1.board.set_multiplier(3, 2, 2)
 	gc1.board.set_multiplier(5, 2, 3)
-	var m_mile := gc1.place_from_tray(1, Vector2i(0, 2)) # +630 -> 650
-	_assert_eq(m_mile["new_score"], 650, "Score reached 650")
-	_assert_eq(sm1.save_count, 1, "Crossing 500-point milestone triggers 1 disk save")
+	var m_mile := gc1.place_from_tray(1, Vector2i(0, 2)) # +3750 -> 3850
+	_assert_eq(m_mile["new_score"], 3850, "Score reached 3850")
+	_assert_eq(sm1.save_count, 1, "Crossing 2500-point milestone triggers 1 disk save")
 
-	# Another small move (+5 -> 655) must NOT hammer disk!
+	# Another small move (+25 -> 3875) must NOT hammer disk!
 	gc1.board.clear_board()
 	var m_small := gc1.place_from_tray(2, Vector2i(0, 0))
-	_assert_eq(m_small["new_score"], 655, "Score is 655")
+	_assert_eq(m_small["new_score"], 3875, "Score is 3875")
 	_assert_eq(sm1.save_count, 1, "Small increment after milestone does NOT write to disk")
 
-	# Starting a new game flushes unsaved tail (655) cleanly!
+	# Starting a new game flushes unsaved tail (3875) cleanly!
 	gc1.start_new_game(113)
-	_assert_eq(sm1.high_score, 655, "start_new_game flushed unsaved 655 PB to SaveManager")
-	_assert_eq(sm1.save_count, 2, "Flush wrote updated 655 record to disk")
-	_assert_eq(gc1.score_engine.session_starting_high_score, 655, "Session starting high score is 655")
+	_assert_eq(sm1.high_score, 3875, "start_new_game flushed unsaved 3875 PB to SaveManager")
+	_assert_eq(sm1.save_count, 2, "Flush wrote updated 3875 record to disk")
+	_assert_eq(gc1.score_engine.session_starting_high_score, 3875, "Session starting high score is 3875")
 
-	# B. Subsequent run: just_beat_high_score fires ONCE when strictly exceeding 655!
+	# B. Subsequent run: just_beat_high_score fires ONCE when strictly exceeding 3875!
 	gc1.board.clear_board()
 	gc1.tray[0] = PieceCatalog.create_piece_by_id("dot_1x1", 0)
 	gc1.tray[1] = PieceCatalog.create_piece_by_id("dot_1x1", 1)
 	gc1.tray[2] = PieceCatalog.create_piece_by_id("dot_1x1", 2)
-	var under := gc1.place_from_tray(0, Vector2i(0, 0)) # 5 pts <= 655
-	_assert_eq(under["is_new_high_score"], false, "Below 655 -> is_new_high_score=false")
-	_assert_eq(under["just_beat_high_score"], false, "Below 655 -> just_beat_high_score=false")
+	var under := gc1.place_from_tray(0, Vector2i(0, 0)) # 25 pts <= 3875
+	_assert_eq(under["is_new_high_score"], false, "Below 3875 -> is_new_high_score=false")
+	_assert_eq(under["just_beat_high_score"], false, "Below 3875 -> just_beat_high_score=false")
 	_assert_eq(sm1.save_count, 2, "No disk write below PB")
 
-	# Clear with x2*x3 + 1 line = 630 pts -> total 635 (still below 655!)
+	# Clear with x2*x3 + 1 line = 3750 pts -> total 3775 (still below 3875!)
 	gc1.board.clear_board()
 	_fill_row_except(gc1.board, 3, [0], 1)
 	gc1.board.set_multiplier(2, 3, 2)
 	gc1.board.set_multiplier(4, 3, 3)
-	var close := gc1.place_from_tray(1, Vector2i(0, 3)) # 635
-	_assert_eq(close["new_score"], 635, "Score is 635 (still below 655)")
-	_assert_eq(close["just_beat_high_score"], false, "Still below 655")
+	var close := gc1.place_from_tray(1, Vector2i(0, 3)) # 3775
+	_assert_eq(close["new_score"], 3775, "Score is 3775 (still below 3875)")
+	_assert_eq(close["just_beat_high_score"], false, "Still below 3875")
 
-	# Clear another line -> 635 + 158 = 793 > 655 -> FIRES just_beat_high_score ONCE & saves immediately!
+	# Clear another line -> 3775 + 938 = 4713 > 3875 -> FIRES just_beat_high_score ONCE & saves immediately!
 	gc1.board.clear_board()
 	_fill_row_except(gc1.board, 3, [0], 1)
 	var beat := gc1.place_from_tray(2, Vector2i(0, 3))
-	_assert_true(int(beat["new_score"]) > 655, "Strictly exceeded 655")
+	_assert_true(int(beat["new_score"]) > 3875, "Strictly exceeded 3875")
 	_assert_eq(beat["is_new_high_score"], true, "is_new_high_score=true after beating PB")
 	_assert_eq(beat["just_beat_high_score"], true, "just_beat_high_score fires ONCE when crossing prior PB")
 	_assert_eq(sm1.save_count, 3, "Crossing prior PB saves immediately to disk")

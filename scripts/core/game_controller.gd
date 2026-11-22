@@ -17,7 +17,7 @@ enum GameMode {
 }
 
 const TRAY_SIZE := 3
-const SAVE_MILESTONE_STEP := 500
+const SAVE_MILESTONE_STEP := 2500
 const SPRINT_TOTAL_TRAYS := 20
 const SPRINT_TOTAL_MOVES := 60
 
@@ -548,7 +548,7 @@ func _revive_clear_zone(
 
 
 static func compute_run_coins(final_score: int, best_combo: int) -> int:
-	return maxi(10, int(maxi(0, final_score) / 25) + maxi(0, best_combo) * 5)
+	return maxi(10, int(maxi(0, final_score) / 150) + maxi(0, best_combo) * 5)
 
 
 ## Credits earned run coins safely (only uncredited delta, preventing duplicate credit across Revive).
