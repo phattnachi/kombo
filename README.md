@@ -2,6 +2,8 @@
 
 8×8 Portrait Combo & FEVER Block Puzzle built with **Godot 4.7.2**.
 
+**Play Online:** https://phattnachi.github.io/kombo/
+
 ## Modes
 - **Classic:** Endless 8×8 board with HOLD / STASH vault, `×2`/`×3` multiplier tiles, Bomb & Lightning specials, and 2× FEVER mode.
 - **Daily Challenge:** Worldwide deterministic daily board & identical block sequence (3 tries/day, streak tracker, clipboard share).
