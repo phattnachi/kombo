@@ -15,7 +15,7 @@ const MASTER_LPF_HZ: float = 14500.0
 
 const VOICE_POOL_SIZE: int = 24
 const TICK_POOL_SIZE: int = 4
-const SCORE_TICK_THROTTLE_MS: int = 35
+const SCORE_TICK_THROTTLE_MS: int = 24
 const ARPEGGIO_STAGGER_SEC: float = 0.035
 
 ## 16-step C Major Pentatonic ascending scale (C5 -> C8).
@@ -230,7 +230,7 @@ func play_score_tick(pitch_ratio: float = 1.0) -> void:
 
 	var stream: AudioStreamWAV = _sfx_streams["score_tick"] as AudioStreamWAV
 	var pitch: float = clampf(pitch_ratio, 0.75, 2.2)
-	_play_on_tick_pool(stream, -9.5, pitch)
+	_play_on_tick_pool(stream, -2.0, pitch)
 
 
 func play_game_over() -> void:

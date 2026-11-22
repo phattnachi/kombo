@@ -804,7 +804,7 @@ func spawn_score_orbs(
 			score_orb_arrived.emit(total_points)
 		return
 
-	var orb_count: int = clampi(from_positions.size(), 5, 12)
+	var orb_count: int = clampi(maxi(from_positions.size(), 6 + int(total_points / 85)), 7, 18)
 	var safe_points: int = maxi(0, total_points)
 	var base_chunk: int = safe_points / orb_count
 	var remainder: int = safe_points % orb_count
@@ -819,7 +819,7 @@ func spawn_score_orbs(
 		var dir_norm: Vector2 = to_target / dist
 		var perp: Vector2 = Vector2(-dir_norm.y, dir_norm.x)
 		var fan_side: float = -1.0 if (i & 1) == 0 else 1.0
-		var arc_bow: float = clampf(dist * _rng.randf_range(0.24, 0.44), 56.0, 155.0) * fan_side
+		var arc_bow: float = clampf(dist * _rng.randf_range(0.22, 0.42), 52.0, 150.0) * fan_side
 		var p1: Vector2 = p0.lerp(target_pos, _rng.randf_range(0.36, 0.56)) + perp * arc_bow + Vector2(0.0, -28.0)
 
 		var blend_target: Color = SCORE_GOLD_COLOR if (i & 1) == 0 else SCORE_CYAN_COLOR
@@ -834,10 +834,11 @@ func spawn_score_orbs(
 			"pos": p0,
 			"col": orb_col,
 			"points": pts_chunk,
-			"delay": float(i) * 0.030,
+			"delay": float(i) * 0.022,
 			"age": 0.0,
-			"dur": _rng.randf_range(0.45, 0.56),
+			"dur": _rng.randf_range(0.28, 0.42),
 			"trail": PackedVector2Array([p0]),
+			"is_final": i == (orb_count - 1),
 		})
 
 
@@ -1115,8 +1116,9 @@ func _update_score_orbs(dt: float) -> void:
 			var target: Vector2 = orb["p2"] as Vector2
 			var pts: int = orb["points"] as int
 			var col: Color = orb["col"] as Color
+			var is_final: bool = bool(orb.get("is_final", false))
 			_score_orbs.remove_at(i)
-			_spawn_orb_arrival_burst(target, col)
+			_spawn_orb_arrival_burst(target, col, is_final)
 			score_orb_arrived.emit(pts)
 		else:
 			orb["age"] = age
@@ -2275,36 +2277,51 @@ func _rebuild_lightning_geometry(bolt: Dictionary) -> void:
 	bolt["branches"] = branches
 
 
-func _spawn_orb_arrival_burst(pos: Vector2, col: Color) -> void:
+func _spawn_orb_arrival_burst(pos: Vector2, col: Color, is_final: bool = false) -> void:
 	_rings.append({
 		"pos": pos,
-		"r0": 6.0,
-		"r1": 28.0,
+		"r0": 8.0,
+		"r1": 68.0 if is_final else 38.0,
 		"col_a": Color.WHITE,
-		"col_b": col,
-		"halo": col,
+		"col_b": Color("#FFE252") if is_final else col,
+		"halo": Color("#FF8A1E") if is_final else col,
 		"halo_b": col,
-		"intensity": 0.82,
+		"intensity": 1.05 if is_final else 0.88,
 		"delay": 0.0,
 		"age": 0.0,
-		"dur": 0.20,
+		"dur": 0.28 if is_final else 0.20,
 	})
-	for k: int in range(3):
+	if is_final:
+		_starbursts.append({
+			"pos": pos,
+			"r0": 14.0,
+			"r1": 58.0,
+			"points": 8,
+			"rot": _rng.randf_range(0.0, PI * 0.25),
+			"rot_spd": 2.6,
+			"outer_col": Color("#FF9224"),
+			"mid_col": Color("#FFE45C"),
+			"core_col": Color.WHITE,
+			"age": 0.0,
+			"dur": 0.26,
+		})
+	var spark_count: int = 8 if is_final else 4
+	for k: int in range(spark_count):
 		var ang: float = _rng.randf_range(0.0, TAU)
-		var spd: float = _rng.randf_range(55.0, 130.0)
+		var spd: float = _rng.randf_range(75.0, 185.0 if is_final else 145.0)
 		_push_spark({
 			"kind": 0,
 			"pos": pos,
 			"vel": Vector2(cos(ang), sin(ang)) * spd,
-			"drag": 5.2,
-			"gravity": 30.0,
-			"size": _rng.randf_range(2.4, 4.0),
+			"drag": 4.8,
+			"gravity": 28.0,
+			"size": _rng.randf_range(2.8, 4.8 if is_final else 4.0),
 			"tail_scale": 0.0,
-			"col": col.lerp(Color.WHITE, 0.45),
+			"col": Color("#FFE659") if (k & 1) == 0 else col.lerp(Color.WHITE, 0.45),
 			"tail_col": Color.WHITE,
 			"delay": 0.0,
 			"age": 0.0,
-			"dur": _rng.randf_range(0.18, 0.28),
+			"dur": _rng.randf_range(0.20, 0.34),
 		})
 
 

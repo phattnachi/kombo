@@ -13,6 +13,7 @@ signal audio_toggled(muted: bool)
 signal restart_requested()
 signal home_requested()
 signal settings_requested()
+signal score_tick_requested(pitch_ratio: float)
 
 const HUD_SIZE := Vector2(540.0, 190.0)
 const FONT_EXTRABOLD_PATH := "res://assets/fonts/Kanit-ExtraBold.ttf"
@@ -94,6 +95,15 @@ var _combo_badge_wobble: float = 0.0
 
 var _fever_ignition_flash: float = 0.0
 var _orb_halo_pulse: float = 0.0
+var _pending_orb_points: float = 0.0
+var _orb_catchup_timer: float = 0.0
+var _roll_tick_accum: float = 0.0
+var _roll_tick_step: int = 0
+var _gain_burst_value: int = 0
+var _gain_burst_timer: float = 0.0
+var _gain_burst_scale: float = 1.0
+var _gain_burst_tilt: float = 0.0
+var _eq_slam_offset: float = 0.0
 
 # Flame shader controls
 var _chips_flame_rect: ColorRect
@@ -164,13 +174,44 @@ func _process(delta: float) -> void:
 	var dt := minf(delta, 0.05)
 	_time_sec += dt
 
-	# Smooth rolling score count-up with acceleration on big jumps.
-	if _displayed_score < float(_target_score):
-		var diff := float(_target_score) - _displayed_score
-		var min_step := maxf(45.0, diff * 7.5) * dt
-		_displayed_score = minf(float(_target_score), _displayed_score + min_step)
+	# Smooth rolling score count-up synchronized with orb barrage & rapid arcade tally ticks.
+	if _pending_orb_points > 0.0:
+		_orb_catchup_timer += dt
+		if _orb_catchup_timer > 0.48:
+			var release := minf(_pending_orb_points, maxf(120.0, _pending_orb_points * 10.0) * dt)
+			_pending_orb_points = maxf(0.0, _pending_orb_points - release)
+
+	var effective_target := maxf(_displayed_score, float(_target_score) - _pending_orb_points)
+	if _displayed_score < effective_target:
+		var diff := effective_target - _displayed_score
+		var min_step := maxf(85.0, diff * 11.5) * dt
+		var prev_int := int(round(_displayed_score))
+		_displayed_score = minf(effective_target, _displayed_score + min_step)
+		var new_int := int(round(_displayed_score))
+		if new_int > prev_int:
+			_roll_tick_accum += dt
+			if _roll_tick_accum >= 0.032:
+				_roll_tick_accum = 0.0
+				_roll_tick_step = mini(_roll_tick_step + 1, 16)
+				score_tick_requested.emit(1.0 + float(_roll_tick_step) * 0.045)
+				_score_scale = maxf(_score_scale, 1.06)
 	elif _displayed_score > float(_target_score):
 		_displayed_score = float(_target_score)
+	else:
+		if _pending_orb_points <= 0.5:
+			_roll_tick_step = 0
+			_roll_tick_accum = 0.0
+
+	if _gain_burst_timer > 0.0:
+		_gain_burst_timer = maxf(0.0, _gain_burst_timer - dt)
+		_gain_burst_scale = lerpf(_gain_burst_scale, 1.0, clampf(dt * 14.0, 0.0, 1.0))
+		if _gain_burst_timer <= 0.0:
+			_gain_burst_value = 0
+
+	if _eq_slam_offset > 0.01:
+		_eq_slam_offset = move_toward(_eq_slam_offset, 0.0, maxf(45.0, _eq_slam_offset * 14.0) * dt)
+	else:
+		_eq_slam_offset = 0.0
 
 	if _displayed_high_score < float(_target_high_score):
 		var hdiff := float(_target_high_score) - _displayed_high_score
@@ -266,6 +307,9 @@ func _process(delta: float) -> void:
 		or _combo_badge_wobble > 0.001
 		or _fever_ignition_flash > 0.001
 		or _orb_halo_pulse > 0.001
+		or _gain_burst_timer > 0.001
+		or _eq_slam_offset > 0.01
+		or _pending_orb_points > 0.5
 	)
 	var needs_shimmer: bool = _fever_active or _combo_streak >= 2 or _mode_badge_urgent or _is_new_high_score
 	if is_animating or (needs_shimmer and int(_time_sec * 20.0) != int((_time_sec - dt) * 20.0)):
@@ -318,6 +362,15 @@ func set_initial_state(score: int, high_score: int) -> void:
 	_combo_badge_wobble = 0.0
 	_fever_ignition_flash = 0.0
 	_orb_halo_pulse = 0.0
+	_pending_orb_points = 0.0
+	_orb_catchup_timer = 0.0
+	_roll_tick_accum = 0.0
+	_roll_tick_step = 0
+	_gain_burst_value = 0
+	_gain_burst_timer = 0.0
+	_gain_burst_scale = 1.0
+	_gain_burst_tilt = 0.0
+	_eq_slam_offset = 0.0
 
 	_chips_flame_target = 0.0
 	_chips_flame_intensity = 0.0
@@ -361,33 +414,47 @@ func apply_move_result(result: Dictionary) -> void:
 	# Update Balatro flame targets strictly: OFF when calm, dynamic roar at combo >= 2, wild inferno in FEVER.
 	_update_flame_targets(_combo_streak, _fever_active, _display_mult, false)
 
-	# Balatro Scale-Punch on Hero Score (1.12x .. 1.32x proportional to points_earned).
+	var lines_cleared := int(result.get("lines_cleared", 0))
+	var blast_cells := result.get("blast_cells", []) as Array
+	var did_clear := lines_cleared > 0 or not blast_cells.is_empty()
+
+	# Visceral Balatro Scale-Punch, Live +POINTS Surge Counter, and Orb-Synchronized Hold on Hero Score!
 	if points_earned > 0:
-		var t_mag := clampf((float(points_earned) - 15.0) / 1400.0, 0.0, 1.0)
-		var punch := lerpf(1.12, 1.32, pow(t_mag, 0.65))
+		if did_clear:
+			# Hold 78% of clear points for the incoming orb barrage so each orb impact visibly jacks up the score!
+			_pending_orb_points += float(points_earned) * 0.78
+			_orb_catchup_timer = 0.0
+			_eq_slam_offset = 15.0
+
+		_gain_burst_value += points_earned
+		_gain_burst_timer = 1.05 if did_clear else 0.55
+		_gain_burst_scale = 1.42 if did_clear else 1.20
+
+		var t_mag := clampf((float(points_earned) - 10.0) / 900.0, 0.0, 1.0)
+		var punch := lerpf(1.16 if not did_clear else 1.28, 1.54, pow(t_mag, 0.55))
 		_score_scale = maxf(_score_scale, punch)
-		_score_scale_vel = maxf(_score_scale_vel, 1.2 + t_mag * 2.4)
-		_score_flash = clampf(0.45 + t_mag * 0.55, 0.45, 1.0)
-		if points_earned >= 120:
-			_score_tilt_dir = -_score_tilt_dir
-			var tilt_deg := lerpf(1.0, 2.6, t_mag)
-			_score_rot = deg_to_rad(tilt_deg) * _score_tilt_dir
+		_score_scale_vel = maxf(_score_scale_vel, (1.8 if not did_clear else 2.8) + t_mag * 3.2)
+		_score_flash = clampf((0.55 if not did_clear else 0.78) + t_mag * 0.45, 0.55, 1.0)
+		_score_tilt_dir = -_score_tilt_dir
+		var tilt_deg := lerpf(1.4 if not did_clear else 2.6, 5.8, t_mag)
+		_score_rot = deg_to_rad(tilt_deg) * _score_tilt_dir
+		_gain_burst_tilt = -_score_rot * 0.85
 
 	# Tactile equation pill punches.
 	if base_chips > 0:
-		var chip_boost := clampf(float(base_chips) / 400.0, 0.0, 1.0)
-		_chips_scale = maxf(_chips_scale, lerpf(1.08, 1.22, chip_boost))
-		_chips_rot = deg_to_rad(-2.0 - chip_boost * 1.8)
-		_chips_flash = clampf(0.45 + chip_boost * 0.55, 0.45, 1.0)
+		var chip_boost := clampf(float(base_chips) / 320.0, 0.0, 1.0)
+		_chips_scale = maxf(_chips_scale, lerpf(1.12, 1.30, chip_boost))
+		_chips_rot = deg_to_rad(-2.6 - chip_boost * 2.4)
+		_chips_flash = clampf(0.55 + chip_boost * 0.45, 0.55, 1.0)
 
 	if total_mult > 1.01 or _fever_active:
-		var mult_boost := clampf((total_mult - 1.0) / 9.0, 0.0, 1.0)
-		_mult_scale = maxf(_mult_scale, lerpf(1.14, 1.30, mult_boost))
-		_mult_rot = deg_to_rad(2.2 + mult_boost * 2.6)
-		_mult_flash = clampf(0.55 + mult_boost * 0.45, 0.55, 1.0)
-		_x_scale = maxf(_x_scale, lerpf(1.16, 1.34, mult_boost))
+		var mult_boost := clampf((total_mult - 1.0) / 7.0, 0.0, 1.0)
+		_mult_scale = maxf(_mult_scale, lerpf(1.18, 1.38, mult_boost))
+		_mult_rot = deg_to_rad(2.8 + mult_boost * 3.0)
+		_mult_flash = clampf(0.65 + mult_boost * 0.35, 0.65, 1.0)
+		_x_scale = maxf(_x_scale, lerpf(1.24, 1.48, mult_boost))
 	else:
-		_x_scale = maxf(_x_scale, 1.06)
+		_x_scale = maxf(_x_scale, 1.12)
 
 	# Elastic spring pop for centered Combo pill on FEVER bar.
 	if _combo_streak >= 2 and not _fever_active:
@@ -406,18 +473,25 @@ func apply_move_result(result: Dictionary) -> void:
 
 func trigger_score_orb_impact(points_chunk: int) -> void:
 	var chunk := maxi(0, points_chunk)
-	if chunk > 0 and _displayed_score < float(_target_score):
-		_displayed_score = minf(float(_target_score), _displayed_score + float(chunk))
-		if _is_new_high_score and _displayed_high_score < _displayed_score:
-			_displayed_high_score = minf(float(_target_high_score), _displayed_score)
+	if chunk > 0:
+		_pending_orb_points = maxf(0.0, _pending_orb_points - float(chunk))
+		if _displayed_score < float(_target_score):
+			_displayed_score = minf(float(_target_score), _displayed_score + float(chunk))
+			if _is_new_high_score and _displayed_high_score < _displayed_score:
+				_displayed_high_score = minf(float(_target_high_score), _displayed_score)
 
-	var chunk_mag := clampf(float(chunk) / 250.0, 0.0, 1.0)
-	_score_scale = maxf(_score_scale, lerpf(1.09, 1.22, chunk_mag))
-	_score_scale_vel = maxf(_score_scale_vel, 1.1 + chunk_mag * 1.6)
-	_score_flash = maxf(_score_flash, 0.65 + chunk_mag * 0.35)
-	_orb_halo_pulse = 1.0
+	var chunk_mag := clampf(float(chunk) / 140.0, 0.0, 1.0)
+	var is_final_slam := _pending_orb_points <= 1.0 and absf(float(_target_score) - _displayed_score) <= float(maxi(chunk, 25))
+	var impact_scale := lerpf(1.22, 1.46, chunk_mag) + (0.10 if is_final_slam else 0.0)
+	_score_scale = maxf(_score_scale, impact_scale)
+	_score_scale_vel = maxf(_score_scale_vel, 2.2 + chunk_mag * 2.6 + (1.2 if is_final_slam else 0.0))
+	_score_flash = 1.0
+	_orb_halo_pulse = 1.35 if is_final_slam else 1.15
 	_score_tilt_dir = -_score_tilt_dir
-	_score_rot = deg_to_rad(lerpf(0.7, 2.0, chunk_mag)) * _score_tilt_dir
+	_score_rot = deg_to_rad(lerpf(1.8, 4.8, chunk_mag) + (1.2 if is_final_slam else 0.0)) * _score_tilt_dir
+	if _gain_burst_timer > 0.0:
+		_gain_burst_timer = maxf(_gain_burst_timer, 0.52)
+		_gain_burst_scale = maxf(_gain_burst_scale, 1.30 if is_final_slam else 1.22)
 
 	queue_redraw()
 	if _fg_layer != null:
@@ -921,7 +995,7 @@ func _draw_low_backing_plate(ci: CanvasItem) -> void:
 func _draw_chips_pill_body(ci: CanvasItem) -> void:
 	var calm := _is_equation_calm()
 	var rect := Rect2(142.0, 113.0, 102.0, 34.0) if calm else CHIPS_PILL_RECT
-	var center := rect.get_center()
+	var center := rect.get_center() + Vector2(_eq_slam_offset, 0.0)
 	var local_rect := Rect2(-rect.size * 0.5, rect.size)
 
 	ci.draw_set_transform(center, _chips_rot, Vector2(_chips_scale, _chips_scale))
@@ -953,7 +1027,7 @@ func _draw_chips_pill_body(ci: CanvasItem) -> void:
 func _draw_mult_pill_body(ci: CanvasItem) -> void:
 	var calm := _is_equation_calm()
 	var rect := Rect2(296.0, 113.0, 102.0, 34.0) if calm else MULT_PILL_RECT
-	var center := rect.get_center()
+	var center := rect.get_center() - Vector2(_eq_slam_offset, 0.0)
 	var local_rect := Rect2(-rect.size * 0.5, rect.size)
 
 	ci.draw_set_transform(center, _mult_rot, Vector2(_mult_scale, _mult_scale))
@@ -1268,31 +1342,57 @@ func _draw_hero_total_score(ci: CanvasItem) -> void:
 	var score_text := format_comma_int(score_val)
 	var center := Vector2(size.x * 0.5, SCORE_CENTER_LOCAL.y)
 
-	# Velvety Gaussian glow aura behind score (ZERO hard elliptical circle!).
-	var base_glow_alpha := 0.18 + _score_flash * 0.30 + _orb_halo_pulse * 0.24
+	# Velvety Gaussian glow aura behind score (flares intensely on orb slams & big combos!).
+	var base_glow_alpha := clampf(0.18 + _score_flash * 0.42 + _orb_halo_pulse * 0.34, 0.0, 0.95)
 	var glow_col := Color(0.45, 0.72, 1.0, base_glow_alpha).lerp(
-		Color(1.0, 0.82, 0.26, base_glow_alpha * 1.25),
-		clampf(_score_flash + _orb_halo_pulse * 0.8 + (0.45 if _fever_active else 0.0), 0.0, 1.0)
+		Color(1.0, 0.80, 0.18, minf(1.0, base_glow_alpha * 1.35)),
+		clampf(_score_flash + _orb_halo_pulse * 0.85 + (0.45 if _fever_active else 0.0), 0.0, 1.0)
 	)
-	_draw_soft_glow(ci, center, Vector2(118.0 + _orb_halo_pulse * 22.0, 34.0 + _orb_halo_pulse * 8.0), glow_col)
+	_draw_soft_glow(ci, center, Vector2(124.0 + _orb_halo_pulse * 38.0 + _score_flash * 22.0, 36.0 + _orb_halo_pulse * 14.0 + _score_flash * 8.0), glow_col)
+	if _orb_halo_pulse > 0.15 or _score_flash > 0.35:
+		var hot_alpha := clampf((_orb_halo_pulse * 0.45 + _score_flash * 0.35), 0.0, 0.78)
+		_draw_soft_glow(ci, center, Vector2(76.0 + _orb_halo_pulse * 24.0, 24.0 + _orb_halo_pulse * 10.0), Color(1.0, 0.96, 0.72, hot_alpha))
 
-	# 54px Kanit-ExtraBold hero score when calm (effortless hierarchy!), 48px during roaring active combos.
+	# 54px Kanit-ExtraBold hero score when calm, 48px during roaring active combos.
 	var font_size := 54 if _is_equation_calm() else 48
 	var max_w := 268.0
 	var measured_w := _font_extrabold.get_string_size(score_text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 	if measured_w > max_w and measured_w > 1.0:
 		font_size = maxi(30, int(floor(float(font_size) * (max_w / measured_w))))
 
-	var text_col := Color("#FFFFFF").lerp(Color("#FFE875"), clampf(_score_flash * 0.85, 0.0, 0.85))
+	var flash_mix := clampf(_score_flash * 0.95 + _orb_halo_pulse * 0.35, 0.0, 1.0)
+	var text_col := Color("#FFFFFF").lerp(Color("#FFE24A"), flash_mix)
+	var outline_col := Color("#0A102B").lerp(Color("#4A1C00"), flash_mix * 0.75)
 	ci.draw_set_transform(center, _score_rot, Vector2(_score_scale, _score_scale))
-	_draw_centered_outlined_text(ci, _font_extrabold, Vector2.ZERO, score_text, font_size, text_col, Color("#0A102B"), 8, 3.5)
+	_draw_centered_outlined_text(ci, _font_extrabold, Vector2.ZERO, score_text, font_size, text_col, outline_col, 8, 3.5)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+	# Live accumulating "+POINTS!" surge counter right beside the Hero Score!
+	if _gain_burst_timer > 0.01 and _gain_burst_value > 0:
+		var gain_alpha := clampf(_gain_burst_timer / 0.24, 0.0, 1.0)
+		var gain_text := "+%s" % format_comma_int(_gain_burst_value)
+		if _gain_burst_value >= 300:
+			gain_text += "!"
+		var half_score_w := minf(measured_w, max_w) * 0.5 * _score_scale
+		var gain_pos := Vector2(
+			clampf(center.x + half_score_w + 46.0, 342.0, 408.0),
+			center.y - 4.0 - (1.0 - clampf(_gain_burst_timer, 0.0, 1.0)) * 10.0
+		)
+		var is_big_gain := _gain_burst_value >= 150 or _fever_active
+		var gain_fill := (Color("#FFE854") if is_big_gain else Color("#7CF6FF")).lerp(Color.WHITE, clampf((_gain_burst_scale - 1.0) * 1.8, 0.0, 0.75))
+		gain_fill.a = gain_alpha
+		var gain_out := Color("#3D1200", gain_alpha) if is_big_gain else Color("#052242", gain_alpha)
+		var gain_fsize := clampi(20 + int(float(_gain_burst_value) / 220.0), 20, 28)
+		_draw_soft_glow(ci, gain_pos, Vector2(44.0, 18.0), Color(gain_fill.r, gain_fill.g, gain_fill.b, 0.34 * gain_alpha))
+		ci.draw_set_transform(gain_pos, _gain_burst_tilt, Vector2(_gain_burst_scale, _gain_burst_scale))
+		_draw_centered_outlined_text(ci, _font_extrabold, Vector2.ZERO, gain_text, gain_fsize, gain_fill, gain_out, 5, 2.0)
+		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_chips_pill_text(ci: CanvasItem) -> void:
 	var calm := _is_equation_calm()
 	var rect := Rect2(142.0, 113.0, 102.0, 34.0) if calm else CHIPS_PILL_RECT
-	var center := rect.get_center()
+	var center := rect.get_center() + Vector2(_eq_slam_offset, 0.0)
 	var chips_text := format_comma_int(_display_chips)
 	var font_size := _fit_pill_font_size(chips_text, 22 if calm else 34, 16, rect.size.x - 14.0)
 	var fill_col := Color(0.86, 0.94, 1.0, 0.88) if calm else Color("#FFFFFF")
@@ -1321,7 +1421,7 @@ func _draw_mult_sign(ci: CanvasItem) -> void:
 func _draw_mult_pill_text(ci: CanvasItem) -> void:
 	var calm := _is_equation_calm()
 	var rect := Rect2(296.0, 113.0, 102.0, 34.0) if calm else MULT_PILL_RECT
-	var center := rect.get_center()
+	var center := rect.get_center() - Vector2(_eq_slam_offset, 0.0)
 	var mult_text := format_mult(_display_mult)
 	var font_size := _fit_pill_font_size(mult_text, 22 if calm else 34, 16, rect.size.x - 14.0)
 	var text_col := Color(0.90, 0.86, 1.0, 0.88) if calm else (Color("#FFFCE0") if _fever_active else Color("#FFFFFF"))

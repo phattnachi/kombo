@@ -609,6 +609,7 @@ func _init_controller_and_signals() -> void:
 	hud_view.restart_requested.connect(_on_restart_requested)
 	hud_view.home_requested.connect(_on_home_requested)
 	hud_view.settings_requested.connect(_on_hud_settings_requested)
+	hud_view.score_tick_requested.connect(func(pitch: float) -> void: sound_synth.play_score_tick(pitch))
 	game_over_overlay.play_again_pressed.connect(_on_restart_requested)
 	game_over_overlay.home_pressed.connect(_on_home_requested)
 	game_over_overlay.share_pressed.connect(_on_daily_share_pressed)
@@ -1199,19 +1200,19 @@ func _on_move_resolved(result: Dictionary) -> void:
 			_vibrate(clampi(22 + lines_cleared * 6, 22, 40))
 
 		# Bold Balatro score pop & flying orbs converging on top Hero Score!
-		var pop_size := clampi(28 + int(float(points_earned) / 140.0), 28, 42)
+		var pop_size := clampi(32 + int(float(points_earned) / 110.0), 32, 46)
 		var pop_bg := Color("#E83B28") if fever_active else Color("#1464D8")
-		var pop_text := "+%s" % HudView.format_comma_int(points_earned)
+		var pop_text := "+%s!" % HudView.format_comma_int(points_earned) if points_earned >= 200 else "+%s" % HudView.format_comma_int(points_earned)
 		vfx_layer.spawn_floating_text(
 			centroid + Vector2(0.0, -18.0),
 			pop_text,
 			Color("#FFF8B8") if fever_active else Color("#FFFFFF"),
 			pop_size,
-			-3.5 if (combo_streak % 2 == 0) else 3.5,
+			-3.8 if (combo_streak % 2 == 0) else 3.8,
 			pop_bg
 		)
 
-		var score_target_pf := Vector2(270.0, 72.0)
+		var score_target_pf := Vector2(270.0, 48.0)
 		_orb_tick_index = 0
 		vfx_layer.spawn_score_orbs(orb_origins, score_target_pf, points_earned, accent)
 
@@ -1253,7 +1254,11 @@ func _on_move_resolved(result: Dictionary) -> void:
 func _on_score_orb_arrived(points_chunk: int) -> void:
 	hud_view.trigger_score_orb_impact(points_chunk)
 	_orb_tick_index += 1
-	sound_synth.play_score_tick(1.0 + minf(0.55, float(_orb_tick_index) * 0.06))
+	sound_synth.play_score_tick(1.05 + minf(0.85, float(_orb_tick_index) * 0.06))
+	if vfx_layer != null:
+		vfx_layer.add_trauma(0.045)
+	if _orb_tick_index % 3 == 1:
+		_vibrate(8)
 
 
 func _on_game_over_triggered(final_score: int, high_score: int) -> void:
