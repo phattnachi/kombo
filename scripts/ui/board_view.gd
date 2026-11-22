@@ -132,13 +132,6 @@ func _process(delta: float) -> void:
 
 	if _preview_active:
 		dirty = true
-	else:
-		# Throttle ambient idle multiplier/frame shimmer to 15 Hz so CPU stays cool while thinking!
-		_shimmer_accum += delta
-		var interval: float = 0.045 if (_target_fever or _target_combo >= 2) else 0.075
-		if _shimmer_accum >= interval:
-			_shimmer_accum = 0.0
-			dirty = true
 
 	if dirty:
 		queue_redraw()

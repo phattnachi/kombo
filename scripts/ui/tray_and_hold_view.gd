@@ -315,12 +315,6 @@ func _process(delta: float) -> void:
 			_return_active = false
 			_return_piece = null
 
-	if not dirty and (_has_special_piece_in_tray_or_hold() or _target_fever):
-		_idle_shimmer_accum += delta
-		if _idle_shimmer_accum >= 0.055:
-			_idle_shimmer_accum = 0.0
-			dirty = true
-
 	if dirty:
 		queue_redraw()
 	if overlay_dirty and _drag_overlay != null:

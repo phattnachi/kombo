@@ -53,6 +53,8 @@ var last_run_base_coins: int = 0
 var _coins_credited_this_run: int = 0
 
 var _last_saved_high_score: int = 0
+var _sim_board: BoardState = null
+var _cached_shape_templates: Dictionary = {}
 
 
 func _init(p_save_manager: SaveManager = null, seed_value: int = -1) -> void:
@@ -1023,7 +1025,9 @@ func _apply_smart_deal_guarantee() -> void:
 	if anchor_placements.is_empty():
 		return
 
-	var sim_board := board.clone()
+	if _sim_board == null:
+		_sim_board = BoardState.new()
+	_sim_board.copy_from(board)
 	var chosen_origin := anchor_placements[rng.randi_range(0, anchor_placements.size() - 1)]
 	# Prefer a line-clearing placement if one exists so post-placement board has maximum room.
 	for orig in anchor_placements:
@@ -1031,8 +1035,8 @@ func _apply_smart_deal_guarantee() -> void:
 		if not (prev["cleared_rows"] as Array).is_empty() or not (prev["cleared_cols"] as Array).is_empty():
 			chosen_origin = orig
 			break
-	sim_board.place_and_resolve(anchor_piece, chosen_origin)
-	if sim_board.get_empty_cells().is_empty():
+	_sim_board.place_and_resolve(anchor_piece, chosen_origin)
+	if _sim_board.get_empty_cells().is_empty():
 		return
 
 	var other_slots := _get_non_special_slots(anchor_slot)
@@ -1040,12 +1044,14 @@ func _apply_smart_deal_guarantee() -> void:
 		return
 
 	var slot_b := other_slots[rng.randi_range(0, other_slots.size() - 1)]
-	var piece_b := _pick_weighted_fitting_piece(sim_board, _get_tray_shape_ids())
+	var piece_b := _pick_weighted_fitting_piece(_sim_board, _get_tray_shape_ids())
 	if piece_b != null:
 		tray[slot_b] = piece_b
 
 
 func _has_two_piece_solvency() -> bool:
+	if _sim_board == null:
+		_sim_board = BoardState.new()
 	for i in range(TRAY_SIZE):
 		var pi := tray[i]
 		if pi == null:
@@ -1054,17 +1060,17 @@ func _has_two_piece_solvency() -> bool:
 		if placements.is_empty():
 			continue
 
-		# Sample up to 24 evenly spaced placements for bounded sub-millisecond verification.
-		var max_checks := mini(placements.size(), 24)
+		# Sample up to 8 evenly spaced placements on a zero-allocation reusable _sim_board.
+		var max_checks := mini(placements.size(), 8)
 		for idx in range(max_checks):
-			var sample_idx := idx if placements.size() <= 24 else mini(placements.size() - 1, int(float(idx * placements.size()) / float(max_checks)))
+			var sample_idx := idx if placements.size() <= 8 else mini(placements.size() - 1, int(float(idx * placements.size()) / float(max_checks)))
 			var orig := placements[sample_idx]
-			var sim := board.clone()
-			sim.place_and_resolve(pi, orig)
+			_sim_board.copy_from(board)
+			_sim_board.place_and_resolve(pi, orig)
 			for j in range(TRAY_SIZE):
 				if j == i or tray[j] == null:
 					continue
-				if sim.can_piece_fit_anywhere(tray[j]):
+				if _sim_board.can_piece_fit_anywhere(tray[j]):
 					return true
 	return false
 
@@ -1079,7 +1085,10 @@ func _pick_weighted_fitting_piece(
 	var fitting_unique_non_dot: Array[String] = []
 
 	for shape_id in PieceCatalog.get_all_shape_ids():
-		var candidate := PieceCatalog.create_piece_by_id(shape_id, 0)
+		var candidate: PieceCatalog.Piece = _cached_shape_templates.get(shape_id, null) as PieceCatalog.Piece
+		if candidate == null:
+			candidate = PieceCatalog.create_piece_by_id(shape_id, 0)
+			_cached_shape_templates[shape_id] = candidate
 		if target_board.can_piece_fit_anywhere(candidate):
 			fitting_all.append(shape_id)
 			var is_unique := not excluded_ids.has(shape_id)

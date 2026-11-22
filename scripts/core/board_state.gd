@@ -224,15 +224,19 @@ static func empty_preview() -> Dictionary:
 
 func clone() -> BoardState:
 	var copy := BoardState.new()
+	copy.copy_from(self)
+	return copy
+
+
+func copy_from(other: BoardState) -> void:
 	for i in range(GRID_SIZE * GRID_SIZE):
-		var src := _cells[i]
-		var dst := copy._cells[i]
+		var src := other._cells[i]
+		var dst := _cells[i]
 		dst.occupied = src.occupied
 		dst.color_id = src.color_id
 		dst.multiplier = src.multiplier
 		dst.target_type = src.target_type
 		dst.target_hp = src.target_hp
-	return copy
 
 
 func preview_placement(piece: PieceCatalog.Piece, origin: Vector2i) -> Dictionary:

@@ -910,7 +910,7 @@ func clear_all() -> void:
 # ==============================================================================
 
 func _has_visual_activity() -> bool:
-	return _fever_intensity > 0.004 or get_active_particle_count() > 0
+	return _trauma > 0.0001 or get_active_particle_count() > 0
 
 
 func _recompute_shake_offset() -> void:
@@ -924,32 +924,7 @@ func _recompute_shake_offset() -> void:
 
 
 func _update_fever_embers(dt: float) -> void:
-	if _fever_intensity > 0.05:
-		var vp: Vector2 = _get_canvas_size()
-		var spawn_rate: float = 22.0 * _fever_intensity
-		_fever_ember_accum += dt * spawn_rate
-		while _fever_ember_accum >= 1.0:
-			_fever_ember_accum -= 1.0
-			if _fever_embers.size() >= MAX_FEVER_EMBERS:
-				break
-			var on_left: bool = _rng.randf() < 0.5
-			var edge_x: float = _rng.randf_range(4.0, 28.0) if on_left else _rng.randf_range(vp.x - 28.0, vp.x - 4.0)
-			var start_y: float = _rng.randf_range(vp.y * 0.25, vp.y + 10.0)
-			_fever_embers.append({
-				"x_base": edge_x,
-				"x": edge_x,
-				"y": start_y,
-				"vy": -_rng.randf_range(75.0, 175.0),
-				"sway_amp": _rng.randf_range(3.5, 9.5),
-				"sway_freq": _rng.randf_range(3.2, 6.2),
-				"phase": _rng.randf_range(0.0, TAU),
-				"rad": _rng.randf_range(2.2, 4.6),
-				"col": Color("#FFE659").lerp(Color("#FF5822"), _rng.randf_range(0.0, 0.55)),
-				"age": 0.0,
-				"dur": _rng.randf_range(1.1, 1.9),
-			})
-	else:
-		_fever_ember_accum = 0.0
+	_fever_ember_accum = 0.0
 
 	var i: int = _fever_embers.size() - 1
 	while i >= 0:

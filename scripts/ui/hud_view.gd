@@ -279,7 +279,9 @@ func _process(delta: float) -> void:
 	else:
 		_crown_glow = maxf(0.0, _crown_glow - dt * 1.8)
 
-	# Smoothly ramp live Balatro pill flames & lock transforms to bouncing pills.
+	# Smoothly ramp live Balatro pill flames & lock transforms to bouncing pills (only push uniforms on change).
+	var prev_c_flame := _chips_flame_intensity
+	var prev_m_flame := _mult_flame_intensity
 	var c_rate := 10.5 if _chips_flame_target > _chips_flame_intensity else 5.5
 	var m_rate := 10.5 if _mult_flame_target > _mult_flame_intensity else 5.5
 	_chips_flame_intensity = lerpf(_chips_flame_intensity, _chips_flame_target, clampf(c_rate * dt, 0.0, 1.0))
@@ -288,7 +290,13 @@ func _process(delta: float) -> void:
 		_chips_flame_intensity = _chips_flame_target
 	if absf(_mult_flame_intensity - _mult_flame_target) < 0.004:
 		_mult_flame_intensity = _mult_flame_target
-	_apply_flame_uniforms()
+	if (
+		absf(_chips_flame_intensity - prev_c_flame) > 0.001
+		or absf(_mult_flame_intensity - prev_m_flame) > 0.001
+		or absf(_chips_scale - 1.0) > 0.002
+		or absf(_mult_scale - 1.0) > 0.002
+	):
+		_apply_flame_uniforms()
 
 	var is_animating: bool = (
 		absf(_displayed_score - float(_target_score)) > 0.5
@@ -311,8 +319,7 @@ func _process(delta: float) -> void:
 		or _eq_slam_offset > 0.01
 		or _pending_orb_points > 0.5
 	)
-	var needs_shimmer: bool = _fever_active or _combo_streak >= 2 or _mode_badge_urgent or _is_new_high_score
-	if is_animating or (needs_shimmer and int(_time_sec * 20.0) != int((_time_sec - dt) * 20.0)):
+	if is_animating:
 		queue_redraw()
 		if _fg_layer != null:
 			_fg_layer.queue_redraw()

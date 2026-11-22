@@ -1247,8 +1247,9 @@ func _on_move_resolved(result: Dictionary) -> void:
 			bgm_manager.duck(4.5, 0.45, 0.75)
 		vfx_layer.spawn_floating_text(Vector2(270.0, 126.0), "NEW RECORD!", Color("#FFE45C"), 26, -2.5, Color("#A85B00"))
 
-	# 7. Auto-persist active run after every placement so closing the app never loses progress!
-	_persist_active_run_if_needed()
+	# 7. Throttled auto-persist (save every 6 turns, on stage clear, or on game over to prevent per-move disk/IndexedDB lag).
+	if controller.is_game_over or bool(result.get("stage_cleared", false)) or (controller.turn_count % 6 == 0):
+		_persist_active_run_if_needed()
 
 
 func _on_score_orb_arrived(points_chunk: int) -> void:
