@@ -1065,6 +1065,20 @@ func _test_high_score_and_persistence() -> void:
 	_assert_eq(TilePainter.get_active_skin(), "neon", "TilePainter active skin switched to 'neon'")
 	TilePainter.set_active_skin("jewel")
 
+	# D2. Unlockable Patterned Backgrounds Persistence
+	_assert_eq(TilePainter.get_background_catalog().size(), 6, "TilePainter exposes 6 background themes (Swirl + 5 patterned)")
+	_assert_true(sm_skins_reload.is_background_unlocked("swirl"), "Default 'swirl' background unlocked")
+	_assert_true(not sm_skins_reload.is_background_unlocked("candy"), "'candy' background locked initially")
+	sm_skins_reload.add_coins(25000)
+	_assert_true(sm_skins_reload.unlock_background("candy", 20000), "Unlocked 'candy' background for 20,000 coins")
+	_assert_eq(sm_skins_reload.equipped_background, "candy", "'candy' equipped on unlock")
+	var sm_bg_reload := SaveManager.new(TEST_SAVE_PATH)
+	_assert_true(sm_bg_reload.is_background_unlocked("candy"), "'candy' unlock persisted")
+	_assert_eq(sm_bg_reload.equipped_background, "candy", "'candy' equipped state persisted")
+	TilePainter.set_active_background("candy")
+	_assert_eq(TilePainter.get_active_background(), "candy", "TilePainter active background switched to 'candy'")
+	TilePainter.set_active_background("swirl")
+
 	# E. Notifications Setting Persistence & Localized Reminder Templates
 	_assert_eq(sm_skins_reload.notifications_enabled, true, "Notifications default to enabled")
 	sm_skins_reload.update_settings(true, true, true, false)

@@ -144,6 +144,7 @@ static var _cached_extrabold: Font = null
 static var _cached_bold: Font = null
 
 static var _active_skin_id: String = "jewel"
+static var _active_background_id: String = "swirl"
 static var _textures_baked: bool = false
 static var _jewel_textures: Array[ImageTexture] = []
 static var _skin_texture_cache: Dictionary = {}
@@ -189,6 +190,92 @@ const SKIN_CATALOG: Array[Dictionary] = [
 		"accent": Color("#FFE04D"),
 	},
 ]
+
+const BACKGROUND_CATALOG: Array[Dictionary] = [
+	{
+		"id": "swirl",
+		"style_idx": 0,
+		"name": "CLASSIC SWIRL",
+		"subtitle": "Milestone Shifting Waves",
+		"cost": 0,
+		"accent": Color("#3CE8FF"),
+		"bezel": Color("#172044"),
+		"rim": Color("#384C96"),
+	},
+	{
+		"id": "candy",
+		"style_idx": 1,
+		"name": "SWEET CANDY",
+		"subtitle": "Donuts, Swirls & Sprinkles",
+		"cost": 20000,
+		"accent": Color("#FF74B8"),
+		"bezel": Color("#33152E"),
+		"rim": Color("#FF7CC4"),
+	},
+	{
+		"id": "sakura",
+		"style_idx": 2,
+		"name": "SAKURA BLOOM",
+		"subtitle": "Kyoto Dusk & Petals",
+		"cost": 45000,
+		"accent": Color("#FFA2D0"),
+		"bezel": Color("#291433"),
+		"rim": Color("#FF9CD2"),
+	},
+	{
+		"id": "cyber",
+		"style_idx": 3,
+		"name": "CYBER GRID",
+		"subtitle": "Synthwave Neon Horizon",
+		"cost": 75000,
+		"accent": Color("#18F0FF"),
+		"bezel": Color("#161242"),
+		"rim": Color("#26F2FF"),
+	},
+	{
+		"id": "ocean",
+		"style_idx": 4,
+		"name": "DEEP OCEAN",
+		"subtitle": "Caustic Waves & Bubbles",
+		"cost": 110000,
+		"accent": Color("#2CEBFF"),
+		"bezel": Color("#0B263B"),
+		"rim": Color("#30E4FF"),
+	},
+	{
+		"id": "galaxy",
+		"style_idx": 5,
+		"name": "STARLIGHT GALAXY",
+		"subtitle": "Nebula Aurora & Stars",
+		"cost": 160000,
+		"accent": Color("#FFD95C"),
+		"bezel": Color("#191138"),
+		"rim": Color("#C57CFF"),
+	},
+]
+
+
+static func get_background_catalog() -> Array[Dictionary]:
+	return BACKGROUND_CATALOG
+
+
+static func get_active_background() -> String:
+	return _active_background_id
+
+
+static func set_active_background(bg_id: String) -> void:
+	for entry in BACKGROUND_CATALOG:
+		if String(entry.get("id", "")) == bg_id:
+			_active_background_id = bg_id
+			return
+	_active_background_id = "swirl"
+
+
+static func get_background_entry(bg_id: String) -> Dictionary:
+	for entry in BACKGROUND_CATALOG:
+		if String(entry.get("id", "")) == bg_id:
+			return entry
+	return BACKGROUND_CATALOG[0]
 
 
 static func get_skin_catalog() -> Array[Dictionary]:

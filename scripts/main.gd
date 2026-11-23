@@ -735,6 +735,8 @@ func _init_controller_and_signals() -> void:
 	gem_stage_select_overlay.closed.connect(func() -> void: sound_synth.play_pickup())
 	skin_shop_overlay.skin_equipped.connect(_on_skin_equipped)
 	skin_shop_overlay.skin_unlocked.connect(_on_skin_unlocked)
+	skin_shop_overlay.background_equipped.connect(_on_background_equipped)
+	skin_shop_overlay.background_unlocked.connect(_on_background_unlocked)
 	skin_shop_overlay.closed.connect(func() -> void: sound_synth.play_pickup(); _show_title_screen())
 	settings_overlay.sfx_toggled.connect(_on_sfx_toggled)
 	settings_overlay.bgm_toggled.connect(_on_bgm_toggled)
@@ -812,6 +814,8 @@ func _apply_saved_settings() -> void:
 	_notifications_enabled = sm.notifications_enabled if sm != null else true
 	if sm != null:
 		TilePainter.set_active_skin(sm.equipped_skin)
+		TilePainter.set_active_background(sm.equipped_background)
+	_apply_active_background(true)
 	if notification_manager != null:
 		notification_manager.set_enabled(_notifications_enabled, false)
 
@@ -1036,6 +1040,34 @@ func _on_skin_unlocked(_skin_id: String, _remaining_coins: int) -> void:
 		_show_title_screen()
 
 
+func _on_background_equipped(_bg_id: String) -> void:
+	sound_synth.play_combo_clear(5, 2, false)
+	_apply_active_background(false)
+	if title_overlay != null and title_overlay.visible:
+		_show_title_screen()
+
+
+func _on_background_unlocked(_bg_id: String, _remaining_coins: int) -> void:
+	sound_synth.play_high_score()
+	_vibrate(40)
+	_apply_active_background(false)
+	if title_overlay != null and title_overlay.visible:
+		_show_title_screen()
+
+
+func _apply_active_background(immediate: bool = false) -> void:
+	var bg_id := TilePainter.get_active_background()
+	var entry := TilePainter.get_background_entry(bg_id)
+	var style_idx := int(entry.get("style_idx", 0))
+	if swirl_mat != null:
+		swirl_mat.set_shader_parameter("bg_style", style_idx)
+	if style_idx == 0:
+		var score_now := controller.score_engine.score if (controller != null and controller.score_engine != null and playfield_root != null and playfield_root.visible) else 0
+		_apply_milestone_for_score(score_now, immediate)
+	elif board_view != null:
+		board_view.set_milestone_theme(entry.get("bezel", Color("#172044")) as Color, entry.get("rim", Color("#384C96")) as Color, immediate)
+
+
 func _apply_milestone_for_score(current_score: int, immediate: bool = false) -> int:
 	var tier := 0
 	for i in range(MILESTONE_THEMES.size()):
@@ -1056,7 +1088,11 @@ func _apply_milestone_for_score(current_score: int, immediate: bool = false) -> 
 			swirl_mat.set_shader_parameter("color_mid", _bg_col_mid)
 			swirl_mat.set_shader_parameter("color_accent", _bg_col_accent)
 	if board_view != null:
-		board_view.set_milestone_theme(theme["bezel"] as Color, theme["rim"] as Color, immediate)
+		if TilePainter.get_active_background() == "swirl":
+			board_view.set_milestone_theme(theme["bezel"] as Color, theme["rim"] as Color, immediate)
+		else:
+			var bg_entry := TilePainter.get_background_entry(TilePainter.get_active_background())
+			board_view.set_milestone_theme(bg_entry.get("bezel", Color("#172044")) as Color, bg_entry.get("rim", Color("#384C96")) as Color, immediate)
 	return tier if (not immediate and tier > prev_tier) else -1
 
 

@@ -26,6 +26,8 @@ var gem_hunt_best_combo: int = 0
 var coins: int = 0
 var unlocked_skins: Array[String] = ["jewel"]
 var equipped_skin: String = "jewel"
+var unlocked_backgrounds: Array[String] = ["swirl"]
+var equipped_background: String = "swirl"
 var save_count: int = 0
 
 
@@ -55,6 +57,8 @@ func load_data() -> Dictionary:
 	coins = 0
 	unlocked_skins = ["jewel"]
 	equipped_skin = "jewel"
+	unlocked_backgrounds = ["swirl"]
+	equipped_background = "swirl"
 
 	if not FileAccess.file_exists(save_path):
 		return _to_dict()
@@ -103,6 +107,15 @@ func load_data() -> Dictionary:
 				unlocked_skins.append(sid)
 	var eq := _parse_string(data.get("equipped_skin", "jewel"))
 	equipped_skin = eq if unlocked_skins.has(eq) else "jewel"
+	unlocked_backgrounds = ["swirl"]
+	var raw_bgs: Variant = data.get("unlocked_backgrounds", ["swirl"])
+	if typeof(raw_bgs) == TYPE_ARRAY:
+		for item in (raw_bgs as Array):
+			var bid := _parse_string(item)
+			if not bid.is_empty() and not unlocked_backgrounds.has(bid):
+				unlocked_backgrounds.append(bid)
+	var eq_bg := _parse_string(data.get("equipped_background", "swirl"))
+	equipped_background = eq_bg if unlocked_backgrounds.has(eq_bg) else "swirl"
 	return _to_dict()
 
 
@@ -271,6 +284,34 @@ func equip_skin(skin_id: String) -> bool:
 	return true
 
 
+func is_background_unlocked(bg_id: String) -> bool:
+	return bg_id == "swirl" or unlocked_backgrounds.has(bg_id)
+
+
+func unlock_background(bg_id: String, cost: int) -> bool:
+	if bg_id.is_empty():
+		return false
+	if is_background_unlocked(bg_id):
+		return true
+	var price := maxi(0, cost)
+	if coins < price:
+		return false
+	coins -= price
+	unlocked_backgrounds.append(bg_id)
+	equipped_background = bg_id
+	save_data()
+	return true
+
+
+func equip_background(bg_id: String) -> bool:
+	if not is_background_unlocked(bg_id):
+		return false
+	if equipped_background != bg_id:
+		equipped_background = bg_id
+		save_data()
+	return true
+
+
 func reset_save() -> void:
 	high_score = 0
 	best_combo = 0
@@ -298,6 +339,8 @@ func delete_save_file() -> void:
 	coins = 0
 	unlocked_skins = ["jewel"]
 	equipped_skin = "jewel"
+	unlocked_backgrounds = ["swirl"]
+	equipped_background = "swirl"
 	save_count = 0
 	if FileAccess.file_exists(save_path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
@@ -345,4 +388,6 @@ func _to_dict() -> Dictionary:
 		"coins": coins,
 		"unlocked_skins": unlocked_skins,
 		"equipped_skin": equipped_skin,
+		"unlocked_backgrounds": unlocked_backgrounds,
+		"equipped_background": equipped_background,
 	}
