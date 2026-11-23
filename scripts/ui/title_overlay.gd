@@ -1363,7 +1363,7 @@ class _TitleSkinsButton extends Control:
 
 		# Right Coin Balance Pill
 		var coin_str := HudView.format_comma_int(_coins)
-		var pill_w := clampf(44.0 + float(coin_str.length()) * 9.5, 78.0, 124.0)
+		var pill_w := clampf(44.0 + float(coin_str.length()) * 9.5, 78.0, 146.0)
 		var pill_r := Rect2(size.x - pill_w - 10.0, (size.y - 28.0) * 0.5, pill_w, 28.0)
 		_sb_coin_pill.draw(cid, pill_r)
 

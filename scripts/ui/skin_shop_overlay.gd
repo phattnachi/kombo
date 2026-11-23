@@ -330,7 +330,7 @@ class _SkinShopCard extends Control:
 		# Top-right Coin Balance Pill (left of Close button)
 		var coins_val := overlay._save_manager.coins if overlay._save_manager != null else 0
 		var coin_txt := HudView.format_comma_int(coins_val)
-		var pill_w := clampf(54.0 + float(coin_txt.length()) * 10.5, 96.0, 142.0)
+		var pill_w := clampf(52.0 + float(coin_txt.length()) * 10.5, 96.0, 176.0)
 		var pill_rect := Rect2(size.x - 66.0 - pill_w, 16.0, pill_w, 40.0)
 		overlay._sb_coin_pill.draw(cid, pill_rect)
 
@@ -482,9 +482,10 @@ class _SkinRowButton extends Control:
 		)
 
 		# Action Button on Right
-		var btn_rect := Rect2(size.x - 122.0, (size.y - 44.0) * 0.5, 108.0, 44.0)
+		var btn_rect := Rect2(size.x - 128.0, (size.y - 44.0) * 0.5, 116.0, 44.0)
 		var btn_label := ""
 		var btn_text_col := Color.WHITE
+		var show_coin_icon := false
 		if _is_equipped:
 			_sb_btn.bg_color = Color("#16B84E")
 			_sb_btn.border_color = Color("#A8FFBE")
@@ -498,26 +499,46 @@ class _SkinRowButton extends Control:
 		elif _can_afford:
 			_sb_btn.bg_color = Color("#E0820E")
 			_sb_btn.border_color = Color("#FFF08A")
-			btn_label = "🪙 %d" % cost
+			btn_label = HudView.format_comma_int(cost)
 			btn_text_col = Color("#FFFCE0")
+			show_coin_icon = true
 		else:
 			_sb_btn.bg_color = Color("#1C2444")
 			_sb_btn.border_color = Color("#465480")
-			btn_label = "🪙 %d" % cost
+			btn_label = HudView.format_comma_int(cost)
 			btn_text_col = Color("#8A98BF")
+			show_coin_icon = true
 
 		_sb_btn.draw(cid, btn_rect)
-		GameOverOverlay._draw_centered_outlined_text(
-			self,
-			font_extrabold,
-			btn_rect.get_center(),
-			btn_label,
-			15,
-			btn_text_col,
-			Color("#091028"),
-			4,
-			1.4
-		)
+		if show_coin_icon:
+			var cc := Vector2(btn_rect.position.x + 17.0, btn_rect.get_center().y)
+			draw_circle(cc, 7.2, Color("#8C4400") if _can_afford else Color("#394568"))
+			draw_circle(cc, 5.8, Color("#FFD43B") if _can_afford else Color("#6C7A9E"))
+			draw_circle(cc + Vector2(-1.4, -1.4), 2.0, Color("#FFF8C4") if _can_afford else Color("#9AA8C8"))
+			var fsz := 14 if btn_label.length() >= 7 else 15
+			GameOverOverlay._draw_centered_outlined_text(
+				self,
+				font_extrabold,
+				Vector2(btn_rect.get_center().x + 8.0, btn_rect.get_center().y),
+				btn_label,
+				fsz,
+				btn_text_col,
+				Color("#091028"),
+				4,
+				1.3
+			)
+		else:
+			GameOverOverlay._draw_centered_outlined_text(
+				self,
+				font_extrabold,
+				btn_rect.get_center(),
+				btn_label,
+				15,
+				btn_text_col,
+				Color("#091028"),
+				4,
+				1.4
+			)
 
 
 class _ShopCloseButton extends Control:
