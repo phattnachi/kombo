@@ -51,6 +51,7 @@ var _copied_timer: float = 0.0
 
 var _reward_coins_run: int = 0
 var _reward_coins_wallet: int = 0
+var _reward_bonus_note: String = ""
 var _reward_can_double: bool = false
 var _reward_doubled: bool = false
 var _reward_visible: bool = false
@@ -430,9 +431,16 @@ func trigger_copied_feedback() -> void:
 		_share_btn.set_copied(true)
 
 
-func set_reward_info(base_coins: int, wallet_coins: int, can_double: bool, already_doubled: bool = false) -> void:
+func set_reward_info(
+	base_coins: int,
+	wallet_coins: int,
+	can_double: bool,
+	already_doubled: bool = false,
+	bonus_skill_note: String = ""
+) -> void:
 	_reward_coins_run = maxi(0, base_coins * (2 if already_doubled else 1))
 	_reward_coins_wallet = maxi(0, wallet_coins)
+	_reward_bonus_note = bonus_skill_note
 	_reward_can_double = can_double and not already_doubled
 	_reward_doubled = already_doubled
 	_reward_visible = (not _daily_summary_only) and _reward_coins_run > 0
@@ -828,8 +836,9 @@ func _draw_reward_strip(ci: CanvasItem, rect: Rect2) -> void:
 	)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-	var bank_txt := "BANK: %s" % _format_comma_int(_reward_coins_wallet)
-	_draw_left_outlined_text(ci, _font_bold, Vector2(text_x, rect.position.y + 47.0), bank_txt, 11, Color("#A4C6F7"), Color("#060B1E"), 2, 0.8)
+	var bank_txt := _reward_bonus_note if not _reward_bonus_note.is_empty() else ("BANK: %s" % _format_comma_int(_reward_coins_wallet))
+	var bank_col := Color("#7CFFB2") if not _reward_bonus_note.is_empty() else Color("#A4C6F7")
+	_draw_left_outlined_text(ci, _font_bold, Vector2(text_x, rect.position.y + 47.0), bank_txt, 11, bank_col, Color("#060B1E"), 2, 0.8)
 
 
 func _draw_stat_pill_best(ci: CanvasItem, rect: Rect2) -> void:

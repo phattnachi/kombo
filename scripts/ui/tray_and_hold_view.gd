@@ -100,6 +100,7 @@ var _skill_uses_left: Array[int] = [
 	GameController.SKILL_BOMB_MAX_USES,
 	GameController.SKILL_LIGHTNING_MAX_USES,
 ]
+var _skill_stock: Array[int] = [0, 0, 0]
 var _skill_flash_timers: Array[float] = [0.0, 0.0, 0.0]
 var _input_enabled: bool = true
 
@@ -388,6 +389,9 @@ func sync_from_controller(controller: GameController) -> void:
 	_hold_playable = controller.is_hold_piece_playable()
 	if controller.save_manager != null:
 		_wallet_coins = controller.save_manager.coins
+		_skill_stock[0] = controller.save_manager.skill_reroll_stock
+		_skill_stock[1] = controller.save_manager.skill_bomb_stock
+		_skill_stock[2] = controller.save_manager.skill_lightning_stock
 	_skill_uses_left[0] = controller.skill_reroll_left
 	_skill_uses_left[1] = controller.skill_bomb_left
 	_skill_uses_left[2] = controller.skill_lightning_left
@@ -1052,7 +1056,8 @@ func _draw_skill_buttons() -> void:
 		var accent: Color = spec["accent"] as Color
 		var base_bg: Color = spec["bg"] as Color
 		var uses_left: int = _skill_uses_left[i] if i < _skill_uses_left.size() else 0
-		var is_usable: bool = uses_left > 0 and _wallet_coins >= cost
+		var free_stock: int = _skill_stock[i] if i < _skill_stock.size() else 0
+		var is_usable: bool = uses_left > 0 and (free_stock > 0 or _wallet_coins >= cost)
 		var flash: float = _skill_flash_timers[i]
 
 		var scale_s: float = 1.0 - flash * 0.06
@@ -1062,7 +1067,7 @@ func _draw_skill_buttons() -> void:
 		# Shadow + 3D glass skill pill
 		_sb_hold_shadow.draw(cid, Rect2(rect.position + Vector2(0.0, 4.5), rect.size))
 		_sb_hold_outer.bg_color = (base_bg.lightened(flash * 0.28) if is_usable else Color(0.06, 0.08, 0.16, 0.62))
-		_sb_hold_outer.border_color = (accent.lerp(Color.WHITE, flash * 0.65) if is_usable else Color(0.28, 0.34, 0.52, 0.45))
+		_sb_hold_outer.border_color = ((Color("#48F794") if free_stock > 0 else accent).lerp(Color.WHITE, flash * 0.65) if is_usable else Color(0.28, 0.34, 0.52, 0.45))
 		_sb_hold_outer.draw(cid, rect)
 
 		# Top-right remaining-uses micro badge (×1 / ×3 / 0)
@@ -1109,7 +1114,7 @@ func _draw_skill_buttons() -> void:
 			3
 		)
 
-		# Gold Coin Cost pill along bottom (or USED when 0 uses left)
+		# Bottom row: USED / FREE ×N (from stock!) / Gold Coin Cost
 		var cost_y := rect.end.y - 12.5
 		if uses_left <= 0:
 			_draw_centered_text(
@@ -1120,6 +1125,17 @@ func _draw_skill_buttons() -> void:
 				10,
 				Color("#FF8A98"),
 				Color("#1A080C"),
+				3
+			)
+		elif free_stock > 0:
+			_draw_centered_text(
+				self,
+				font_eb,
+				Vector2(rect.get_center().x, cost_y + 0.5),
+				"FREE ×%d" % free_stock,
+				10,
+				Color("#7CFFB2"),
+				Color("#062A14"),
 				3
 			)
 		else:

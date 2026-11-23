@@ -29,6 +29,8 @@ const SKILL_REROLL_MAX_USES := 1
 const SKILL_BOMB_MAX_USES := 3
 const SKILL_LIGHTNING_MAX_USES := 3
 
+const STAGE_REPLAY_SKILL_DROP_CHANCE := 0.20
+
 var board: BoardState
 var score_engine: ScoreEngine
 var save_manager: SaveManager
@@ -583,12 +585,27 @@ func credit_end_of_run_coins() -> Dictionary:
 	if delta > 0 and save_manager != null:
 		save_manager.add_coins(delta)
 		_coins_credited_this_run += delta
+
+	# Daily Challenge free helper skills (1x per day upon completing a Daily Challenge run!).
+	var daily_skill_drops: Array[String] = []
+	if game_mode == GameMode.DAILY and save_manager != null and not daily_date_key.is_empty():
+		if save_manager.can_claim_daily_skill_reward(daily_date_key):
+			save_manager.add_skill_stock("reroll", 1)
+			save_manager.add_skill_stock("bomb", 1)
+			daily_skill_drops.append("reroll")
+			daily_skill_drops.append("bomb")
+			if save_manager.daily_streak >= 3:
+				save_manager.add_skill_stock("lightning", 1)
+				daily_skill_drops.append("lightning")
+			save_manager.mark_daily_skill_reward_claimed(daily_date_key)
+
 	var wallet := save_manager.coins if save_manager != null else _coins_credited_this_run
 	return {
 		"base_coins": last_run_base_coins,
 		"delta_credited": delta,
 		"wallet_coins": wallet,
 		"already_doubled": has_used_double_reward,
+		"daily_skill_drops": daily_skill_drops,
 	}
 
 
@@ -800,6 +817,20 @@ func get_skill_uses_left(skill_id: String) -> int:
 	return 0
 
 
+func roll_stage_skill_drop(cleared_stage_num: int, is_first_clear: bool) -> String:
+	if is_first_clear:
+		var cycle: Array[String] = ["bomb", "reroll", "lightning"]
+		return cycle[posmod(cleared_stage_num - 1, cycle.size())]
+	if rng.randf() < STAGE_REPLAY_SKILL_DROP_CHANCE:
+		var r := rng.randf()
+		if r < 0.40:
+			return "reroll"
+		if r < 0.75:
+			return "bomb"
+		return "lightning"
+	return ""
+
+
 func buy_skill(skill_id: String) -> Dictionary:
 	if is_game_over:
 		return {"success": false, "reason": "game_over"}
@@ -809,7 +840,8 @@ func buy_skill(skill_id: String) -> Dictionary:
 	if skill_id == "reroll":
 		if skill_reroll_left <= 0:
 			return {"success": false, "reason": "no_uses_left", "cost": SKILL_REROLL_COST}
-		if save_manager.coins < SKILL_REROLL_COST:
+		var has_free := save_manager.get_skill_stock("reroll") > 0
+		if not has_free and save_manager.coins < SKILL_REROLL_COST:
 			return {"success": false, "reason": "insufficient_coins", "cost": SKILL_REROLL_COST}
 		var replaceable_slots: Array[int] = []
 		for i in range(TRAY_SIZE):
@@ -817,8 +849,13 @@ func buy_skill(skill_id: String) -> Dictionary:
 				replaceable_slots.append(i)
 		if replaceable_slots.is_empty():
 			return {"success": false, "reason": "no_slot"}
-		if not save_manager.spend_coins(SKILL_REROLL_COST):
-			return {"success": false, "reason": "insufficient_coins", "cost": SKILL_REROLL_COST}
+		var paid_cost := 0
+		if has_free:
+			save_manager.consume_skill_stock("reroll")
+		else:
+			if not save_manager.spend_coins(SKILL_REROLL_COST):
+				return {"success": false, "reason": "insufficient_coins", "cost": SKILL_REROLL_COST}
+			paid_cost = SKILL_REROLL_COST
 		skill_reroll_left = maxi(0, skill_reroll_left - 1)
 		var used_ids: Array[String] = []
 		for idx in replaceable_slots:
@@ -831,9 +868,11 @@ func buy_skill(skill_id: String) -> Dictionary:
 		return {
 			"success": true,
 			"skill_id": "reroll",
-			"cost": SKILL_REROLL_COST,
+			"cost": paid_cost,
+			"used_free_stock": has_free,
 			"slot": -2,
 			"uses_left": skill_reroll_left,
+			"stock_left": save_manager.get_skill_stock("reroll"),
 			"remaining_coins": save_manager.coins,
 		}
 
@@ -843,7 +882,8 @@ func buy_skill(skill_id: String) -> Dictionary:
 		var uses_left := skill_bomb_left if skill_id == "bomb" else skill_lightning_left
 		if uses_left <= 0:
 			return {"success": false, "reason": "no_uses_left", "cost": cost}
-		if save_manager.coins < cost:
+		var has_free := save_manager.get_skill_stock(skill_id) > 0
+		if not has_free and save_manager.coins < cost:
 			return {"success": false, "reason": "insufficient_coins", "cost": cost}
 
 		# Smart placement priority: 1) empty tray slot, 2) empty Hold, 3) largest non-special tray slot, 4) upgrade Bomb->Lightning.
@@ -868,8 +908,13 @@ func buy_skill(skill_id: String) -> Dictionary:
 		if target_slot == -2:
 			return {"success": false, "reason": "no_slot"}
 
-		if not save_manager.spend_coins(cost):
-			return {"success": false, "reason": "insufficient_coins", "cost": cost}
+		var paid_cost := 0
+		if has_free:
+			save_manager.consume_skill_stock(skill_id)
+		else:
+			if not save_manager.spend_coins(cost):
+				return {"success": false, "reason": "insufficient_coins", "cost": cost}
+			paid_cost = cost
 
 		if skill_id == "bomb":
 			skill_bomb_left = maxi(0, skill_bomb_left - 1)
@@ -886,9 +931,11 @@ func buy_skill(skill_id: String) -> Dictionary:
 		return {
 			"success": true,
 			"skill_id": skill_id,
-			"cost": cost,
+			"cost": paid_cost,
+			"used_free_stock": has_free,
 			"slot": target_slot,
 			"uses_left": get_skill_uses_left(skill_id),
+			"stock_left": save_manager.get_skill_stock(skill_id),
 			"remaining_coins": save_manager.coins,
 		}
 
@@ -1039,6 +1086,8 @@ func _resolve_placement(
 	var stage_cleared := false
 	var cleared_stage_num := 0
 	var stage_bonus := 0
+	var stage_skill_drop := ""
+	var stage_first_clear := false
 	if game_mode == GameMode.GEM_HUNT:
 		gem_hunt_targets_left = board.count_remaining_targets()
 		if gem_hunt_targets_left <= 0:
@@ -1052,6 +1101,13 @@ func _resolve_placement(
 			score_res["is_new_high_score"] = bool(s_add["is_new_high_score"])
 			if bool(s_add["just_beat_high_score"]):
 				score_res["just_beat_high_score"] = true
+
+			# Free helper skill drop: 100% guaranteed on first-time stage clear, 20% chance on replay!
+			if save_manager != null:
+				stage_first_clear = save_manager.mark_gem_stage_cleared(cleared_stage_num)
+				stage_skill_drop = roll_stage_skill_drop(cleared_stage_num, stage_first_clear)
+				if not stage_skill_drop.is_empty():
+					save_manager.add_skill_stock(stage_skill_drop, 1)
 
 			gem_hunt_stages_cleared += 1
 			gem_hunt_stage += 1
@@ -1131,6 +1187,8 @@ func _resolve_placement(
 		"cleared_stage": cleared_stage_num,
 		"next_stage": gem_hunt_stage,
 		"stage_bonus": stage_bonus,
+		"stage_skill_drop": stage_skill_drop,
+		"stage_first_clear": stage_first_clear,
 		"stage_mult": score_engine.stage_mult,
 		"gem_targets_left": gem_hunt_targets_left,
 		"gem_targets_total": gem_hunt_targets_total,

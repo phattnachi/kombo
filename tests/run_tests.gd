@@ -1154,6 +1154,38 @@ func _test_high_score_and_persistence() -> void:
 	var lt_slot := int(lt["slot"])
 	_assert_true(lt_slot >= 0 and gc_sk.tray[lt_slot] != null and gc_sk.tray[lt_slot].special_type == PieceCatalog.SPECIAL_LIGHTNING, "Lightning replaced largest non-special tray piece")
 
+	# G. Free Helper Skill Stock (Daily Reward + Stage First-Clear 100% + Replay 20% Drop Rate)
+	var sm_free := SaveManager.new(TEST_SAVE_PATH)
+	sm_free.delete_save_file()
+	var gc_free := GameController.new(sm_free, 909)
+	gc_free.start_daily_challenge("2026-11-23", true)
+	var daily_res := gc_free.credit_end_of_run_coins()
+	var drops: Array = daily_res.get("daily_skill_drops", []) as Array
+	_assert_eq(drops.size(), 2, "Daily completion grants +1 Reroll and +1 Bomb")
+	_assert_eq(sm_free.skill_reroll_stock, 1, "Daily credited 1 free Reroll")
+	_assert_eq(sm_free.skill_bomb_stock, 1, "Daily credited 1 free Bomb")
+	var daily_res_2 := gc_free.credit_end_of_run_coins()
+	_assert_eq((daily_res_2.get("daily_skill_drops", []) as Array).size(), 0, "Daily free reward is strictly once per day")
+
+	# Free stock is consumed BEFORE coins (even with 0 coins!)
+	sm_free.coins = 0
+	var free_rr := gc_free.buy_skill("reroll")
+	_assert_eq(free_rr["success"], true, "Used free Reroll stock with 0 coins")
+	_assert_eq(free_rr["used_free_stock"], true, "Reported used_free_stock=true")
+	_assert_eq(free_rr["cost"], 0, "Cost was 0 coins when using free stock")
+	_assert_eq(sm_free.skill_reroll_stock, 0, "Free Reroll stock decremented 1 -> 0")
+
+	# Gem Hunt stage drops: 100% on first clear, ~20% on replay
+	_assert_true(sm_free.mark_gem_stage_cleared(1), "First clear of Stage 1 returns true")
+	_assert_true(not sm_free.mark_gem_stage_cleared(1), "Replay clear of Stage 1 returns false")
+	var first_drop := gc_free.roll_stage_skill_drop(1, true)
+	_assert_eq(first_drop, "bomb", "Stage 1 first clear guarantees Bomb drop")
+	var replay_drops := 0
+	for _k in range(500):
+		if not gc_free.roll_stage_skill_drop(1, false).is_empty():
+			replay_drops += 1
+	_assert_true(replay_drops >= 65 and replay_drops <= 135, "Replay drop rate over 500 trials stays around 20%% (actual=%d/500)" % replay_drops)
+
 
 # ------------------------------------------------------------------------------
 # 14. Full Multi-Game Simulation & MoveResult Schema / Invariants

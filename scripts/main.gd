@@ -820,24 +820,26 @@ func _on_skill_pressed(skill_id: String) -> void:
 		return
 
 	var cost := int(res.get("cost", 0))
+	var used_free := bool(res.get("used_free_stock", false))
+	var cost_tag := "FREE!" if used_free else ("-%s" % HudView.format_comma_int(cost))
 	var slot := int(res.get("slot", -2))
 	if skill_id == "reroll":
 		tray_view.animate_tray_refill()
 		sound_synth.play_combo_clear(4, 2, false)
 		_vibrate(25)
-		vfx_layer.spawn_floating_text(Vector2(270.0, 646.0), "REROLL!  -%s" % HudView.format_comma_int(cost), Color("#98FFCC"), 22, 0.0, Color("#0E5A4C"))
+		vfx_layer.spawn_floating_text(Vector2(270.0, 646.0), "REROLL!  %s" % cost_tag, Color("#98FFCC"), 22, 0.0, Color("#0E5A4C"))
 	elif skill_id == "bomb":
 		if slot >= 0:
 			tray_view.animate_special_award(slot)
 		sound_synth.play_mult_hit(2)
 		_vibrate(35)
-		vfx_layer.spawn_floating_text(Vector2(270.0, 646.0), "BOMB READY!  -%s" % HudView.format_comma_int(cost), Color("#FFB466"), 22, 0.0, Color("#7A2412"))
+		vfx_layer.spawn_floating_text(Vector2(270.0, 646.0), "BOMB READY!  %s" % cost_tag, Color("#FFB466"), 22, 0.0, Color("#7A2412"))
 	elif skill_id == "lightning":
 		if slot >= 0:
 			tray_view.animate_special_award(slot)
 		sound_synth.play_mult_hit(3)
 		_vibrate(45)
-		vfx_layer.spawn_floating_text(Vector2(270.0, 646.0), "LIGHTNING READY!  -%s" % HudView.format_comma_int(cost), Color("#80F4FF"), 22, 0.0, Color("#143E8A"))
+		vfx_layer.spawn_floating_text(Vector2(270.0, 646.0), "LIGHTNING READY!  %s" % cost_tag, Color("#80F4FF"), 22, 0.0, Color("#143E8A"))
 
 	_persist_active_run_if_needed()
 
@@ -1377,6 +1379,11 @@ func _on_move_resolved(result: Dictionary) -> void:
 			vfx_layer.spawn_floating_text(Vector2(270.0, 380.0), "STAGE %d CLEAR! +%s" % [cleared_stg, HudView.format_comma_int(stg_bonus)], Color("#FFF6A8"), 30, -2.0, Color("#0E5E8A"))
 			var m_clean := ("%.2f" % next_mult).rstrip("0").rstrip(".")
 			vfx_layer.spawn_floating_text(Vector2(270.0, 444.0), "STAGE %d  •  ×%s MULT" % [next_stg, m_clean], Color("#7CF9FF"), 22, 1.5, Color("#132A6B"))
+			var dropped_sk := String(result.get("stage_skill_drop", ""))
+			if not dropped_sk.is_empty():
+				var sk_label := "REROLL" if dropped_sk == "reroll" else ("BOMB" if dropped_sk == "bomb" else "ZAP +")
+				var drop_prefix := "FREE DROP" if bool(result.get("stage_first_clear", false)) else "LUCKY DROP (20%)"
+				vfx_layer.spawn_floating_text(Vector2(270.0, 504.0), "%s: +1 %s!" % [drop_prefix, sk_label], Color("#86FFAA"), 20, -1.2, Color("#0A5834"))
 			sound_synth.play_high_score()
 			_vibrate(65)
 			if bgm_manager != null:
@@ -1669,11 +1676,21 @@ func _finalize_game_over(final_score: int, high_score: int) -> void:
 	else:
 		game_over_overlay.show_game_over(final_score, high_score, controller.score_engine.best_combo, is_new_best)
 
+	var daily_drops: Array = coin_res.get("daily_skill_drops", []) as Array
+	var bonus_note := ""
+	if not daily_drops.is_empty():
+		var names: Array[String] = []
+		for d_id in daily_drops:
+			var s := String(d_id)
+			names.append("+1 REROLL" if s == "reroll" else ("+1 BOMB" if s == "bomb" else "+1 ZAP+"))
+		bonus_note = "DAILY FREE: " + " ".join(names)
+
 	game_over_overlay.set_reward_info(
 		int(coin_res.get("base_coins", 10)),
 		int(coin_res.get("wallet_coins", 0)),
 		controller.can_double_reward(),
-		controller.has_used_double_reward
+		controller.has_used_double_reward,
+		bonus_note
 	)
 
 

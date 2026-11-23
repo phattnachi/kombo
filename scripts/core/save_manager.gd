@@ -28,6 +28,11 @@ var unlocked_skins: Array[String] = ["jewel"]
 var equipped_skin: String = "jewel"
 var unlocked_backgrounds: Array[String] = ["swirl"]
 var equipped_background: String = "swirl"
+var skill_reroll_stock: int = 0
+var skill_bomb_stock: int = 0
+var skill_lightning_stock: int = 0
+var gem_hunt_cleared_stages: Array[int] = []
+var daily_reward_claimed_date: String = ""
 var save_count: int = 0
 
 
@@ -59,6 +64,11 @@ func load_data() -> Dictionary:
 	equipped_skin = "jewel"
 	unlocked_backgrounds = ["swirl"]
 	equipped_background = "swirl"
+	skill_reroll_stock = 0
+	skill_bomb_stock = 0
+	skill_lightning_stock = 0
+	gem_hunt_cleared_stages = []
+	daily_reward_claimed_date = ""
 
 	if not FileAccess.file_exists(save_path):
 		return _to_dict()
@@ -116,6 +126,17 @@ func load_data() -> Dictionary:
 				unlocked_backgrounds.append(bid)
 	var eq_bg := _parse_string(data.get("equipped_background", "swirl"))
 	equipped_background = eq_bg if unlocked_backgrounds.has(eq_bg) else "swirl"
+	skill_reroll_stock = _parse_non_negative_int(data.get("skill_reroll_stock", 0))
+	skill_bomb_stock = _parse_non_negative_int(data.get("skill_bomb_stock", 0))
+	skill_lightning_stock = _parse_non_negative_int(data.get("skill_lightning_stock", 0))
+	gem_hunt_cleared_stages = []
+	var raw_stages: Variant = data.get("gem_hunt_cleared_stages", [])
+	if typeof(raw_stages) == TYPE_ARRAY:
+		for st_item in (raw_stages as Array):
+			var st_num := _parse_non_negative_int(st_item)
+			if st_num >= 1 and not gem_hunt_cleared_stages.has(st_num):
+				gem_hunt_cleared_stages.append(st_num)
+	daily_reward_claimed_date = _parse_string(data.get("daily_reward_claimed_date", ""))
 	return _to_dict()
 
 
@@ -323,6 +344,73 @@ func equip_background(bg_id: String) -> bool:
 	return true
 
 
+func get_skill_stock(skill_id: String) -> int:
+	if skill_id == "reroll":
+		return skill_reroll_stock
+	if skill_id == "bomb":
+		return skill_bomb_stock
+	if skill_id == "lightning":
+		return skill_lightning_stock
+	return 0
+
+
+func add_skill_stock(skill_id: String, amount: int = 1) -> int:
+	var delta := maxi(0, amount)
+	if delta <= 0:
+		return get_skill_stock(skill_id)
+	if skill_id == "reroll":
+		skill_reroll_stock += delta
+	elif skill_id == "bomb":
+		skill_bomb_stock += delta
+	elif skill_id == "lightning":
+		skill_lightning_stock += delta
+	else:
+		return 0
+	save_data()
+	return get_skill_stock(skill_id)
+
+
+func consume_skill_stock(skill_id: String) -> bool:
+	if skill_id == "reroll" and skill_reroll_stock > 0:
+		skill_reroll_stock -= 1
+		save_data()
+		return true
+	if skill_id == "bomb" and skill_bomb_stock > 0:
+		skill_bomb_stock -= 1
+		save_data()
+		return true
+	if skill_id == "lightning" and skill_lightning_stock > 0:
+		skill_lightning_stock -= 1
+		save_data()
+		return true
+	return false
+
+
+func has_cleared_gem_stage_before(stage_num: int) -> bool:
+	return gem_hunt_cleared_stages.has(stage_num)
+
+
+func mark_gem_stage_cleared(stage_num: int) -> bool:
+	if stage_num < 1:
+		return false
+	if gem_hunt_cleared_stages.has(stage_num):
+		return false
+	gem_hunt_cleared_stages.append(stage_num)
+	save_data()
+	return true
+
+
+func can_claim_daily_skill_reward(date_key: String) -> bool:
+	return (not date_key.is_empty()) and (daily_reward_claimed_date != date_key)
+
+
+func mark_daily_skill_reward_claimed(date_key: String) -> void:
+	if date_key.is_empty():
+		return
+	daily_reward_claimed_date = date_key
+	save_data()
+
+
 func reset_save() -> void:
 	high_score = 0
 	best_combo = 0
@@ -352,6 +440,11 @@ func delete_save_file() -> void:
 	equipped_skin = "jewel"
 	unlocked_backgrounds = ["swirl"]
 	equipped_background = "swirl"
+	skill_reroll_stock = 0
+	skill_bomb_stock = 0
+	skill_lightning_stock = 0
+	gem_hunt_cleared_stages = []
+	daily_reward_claimed_date = ""
 	save_count = 0
 	if FileAccess.file_exists(save_path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
@@ -401,4 +494,9 @@ func _to_dict() -> Dictionary:
 		"equipped_skin": equipped_skin,
 		"unlocked_backgrounds": unlocked_backgrounds,
 		"equipped_background": equipped_background,
+		"skill_reroll_stock": skill_reroll_stock,
+		"skill_bomb_stock": skill_bomb_stock,
+		"skill_lightning_stock": skill_lightning_stock,
+		"gem_hunt_cleared_stages": gem_hunt_cleared_stages,
+		"daily_reward_claimed_date": daily_reward_claimed_date,
 	}
