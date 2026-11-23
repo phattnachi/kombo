@@ -815,7 +815,7 @@ func _on_skill_pressed(skill_id: String) -> void:
 		sound_synth.play_invalid()
 		_vibrate(15)
 		var reason := String(res.get("reason", ""))
-		var msg := "NEED MORE COINS!" if reason == "insufficient_coins" else "SLOTS FULL!"
+		var msg := "MAX USES REACHED!" if reason == "no_uses_left" else ("NEED MORE COINS!" if reason == "insufficient_coins" else "SLOTS FULL!")
 		vfx_layer.spawn_floating_text(Vector2(270.0, 650.0), msg, Color("#FF9EA8"), 20, 0.0, Color("#6E1424"))
 		return
 

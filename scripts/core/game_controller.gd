@@ -21,9 +21,13 @@ const SAVE_MILESTONE_STEP := 2500
 const SPRINT_TOTAL_TRAYS := 20
 const SPRINT_TOTAL_MOVES := 60
 
-const SKILL_REROLL_COST := 3000
-const SKILL_BOMB_COST := 6000
-const SKILL_LIGHTNING_COST := 12000
+const SKILL_REROLL_COST := 10000
+const SKILL_BOMB_COST := 15000
+const SKILL_LIGHTNING_COST := 25000
+
+const SKILL_REROLL_MAX_USES := 1
+const SKILL_BOMB_MAX_USES := 3
+const SKILL_LIGHTNING_MAX_USES := 3
 
 var board: BoardState
 var score_engine: ScoreEngine
@@ -42,6 +46,9 @@ var sprint_completed: bool = false
 
 var gem_hunt_stage: int = 1
 var gem_hunt_targets_total: int = 0
+var skill_reroll_left: int = SKILL_REROLL_MAX_USES
+var skill_bomb_left: int = SKILL_BOMB_MAX_USES
+var skill_lightning_left: int = SKILL_LIGHTNING_MAX_USES
 var gem_hunt_targets_left: int = 0
 var gem_hunt_stages_cleared: int = 0
 
@@ -113,6 +120,9 @@ func start_new_game(seed_value: int = -1) -> void:
 func _reset_run_rewards_state() -> void:
 	has_used_revive = false
 	has_used_double_reward = false
+	skill_reroll_left = SKILL_REROLL_MAX_USES
+	skill_bomb_left = SKILL_BOMB_MAX_USES
+	skill_lightning_left = SKILL_LIGHTNING_MAX_USES
 	last_run_base_coins = 0
 	_coins_credited_this_run = 0
 
@@ -294,6 +304,9 @@ func export_run_state() -> Dictionary:
 		"hold_used_this_turn": hold_used_this_turn,
 		"has_used_revive": has_used_revive,
 		"coins_credited_this_run": _coins_credited_this_run,
+		"skill_reroll_left": skill_reroll_left,
+		"skill_bomb_left": skill_bomb_left,
+		"skill_lightning_left": skill_lightning_left,
 		"board_cells": board_cells,
 		"tray": tray_data,
 		"hold_piece": _serialize_piece(hold_piece),
@@ -381,6 +394,9 @@ func restore_run_state(data: Dictionary) -> bool:
 	has_used_double_reward = false
 	last_run_base_coins = 0
 	_coins_credited_this_run = maxi(0, int(data.get("coins_credited_this_run", 0)))
+	skill_reroll_left = clampi(int(data.get("skill_reroll_left", SKILL_REROLL_MAX_USES)), 0, SKILL_REROLL_MAX_USES)
+	skill_bomb_left = clampi(int(data.get("skill_bomb_left", SKILL_BOMB_MAX_USES)), 0, SKILL_BOMB_MAX_USES)
+	skill_lightning_left = clampi(int(data.get("skill_lightning_left", SKILL_LIGHTNING_MAX_USES)), 0, SKILL_LIGHTNING_MAX_USES)
 	is_game_over = false
 
 	var rng_s := String(data.get("rng_state", ""))
@@ -774,6 +790,16 @@ func deal_fresh_tray() -> Array[PieceCatalog.Piece]:
 	return _deal_fresh_tray_internal(true)
 
 
+func get_skill_uses_left(skill_id: String) -> int:
+	if skill_id == "reroll":
+		return skill_reroll_left
+	if skill_id == "bomb":
+		return skill_bomb_left
+	if skill_id == "lightning":
+		return skill_lightning_left
+	return 0
+
+
 func buy_skill(skill_id: String) -> Dictionary:
 	if is_game_over:
 		return {"success": false, "reason": "game_over"}
@@ -781,6 +807,8 @@ func buy_skill(skill_id: String) -> Dictionary:
 		return {"success": false, "reason": "no_wallet"}
 
 	if skill_id == "reroll":
+		if skill_reroll_left <= 0:
+			return {"success": false, "reason": "no_uses_left", "cost": SKILL_REROLL_COST}
 		if save_manager.coins < SKILL_REROLL_COST:
 			return {"success": false, "reason": "insufficient_coins", "cost": SKILL_REROLL_COST}
 		var replaceable_slots: Array[int] = []
@@ -791,6 +819,7 @@ func buy_skill(skill_id: String) -> Dictionary:
 			return {"success": false, "reason": "no_slot"}
 		if not save_manager.spend_coins(SKILL_REROLL_COST):
 			return {"success": false, "reason": "insufficient_coins", "cost": SKILL_REROLL_COST}
+		skill_reroll_left = maxi(0, skill_reroll_left - 1)
 		var used_ids: Array[String] = []
 		for idx in replaceable_slots:
 			var np := PieceCatalog.create_random_piece(rng, used_ids)
@@ -804,12 +833,16 @@ func buy_skill(skill_id: String) -> Dictionary:
 			"skill_id": "reroll",
 			"cost": SKILL_REROLL_COST,
 			"slot": -2,
+			"uses_left": skill_reroll_left,
 			"remaining_coins": save_manager.coins,
 		}
 
 	if skill_id == "bomb" or skill_id == "lightning":
 		var sp_type := PieceCatalog.SPECIAL_BOMB if skill_id == "bomb" else PieceCatalog.SPECIAL_LIGHTNING
 		var cost := SKILL_BOMB_COST if skill_id == "bomb" else SKILL_LIGHTNING_COST
+		var uses_left := skill_bomb_left if skill_id == "bomb" else skill_lightning_left
+		if uses_left <= 0:
+			return {"success": false, "reason": "no_uses_left", "cost": cost}
 		if save_manager.coins < cost:
 			return {"success": false, "reason": "insufficient_coins", "cost": cost}
 
@@ -838,6 +871,11 @@ func buy_skill(skill_id: String) -> Dictionary:
 		if not save_manager.spend_coins(cost):
 			return {"success": false, "reason": "insufficient_coins", "cost": cost}
 
+		if skill_id == "bomb":
+			skill_bomb_left = maxi(0, skill_bomb_left - 1)
+		else:
+			skill_lightning_left = maxi(0, skill_lightning_left - 1)
+
 		var sp_piece := PieceCatalog.create_special_piece(sp_type)
 		if target_slot == -1:
 			hold_piece = sp_piece
@@ -850,6 +888,7 @@ func buy_skill(skill_id: String) -> Dictionary:
 			"skill_id": skill_id,
 			"cost": cost,
 			"slot": target_slot,
+			"uses_left": get_skill_uses_left(skill_id),
 			"remaining_coins": save_manager.coins,
 		}
 

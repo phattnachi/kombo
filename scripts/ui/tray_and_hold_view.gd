@@ -35,7 +35,7 @@ const SKILL_BUTTON_SPECS: Array[Dictionary] = [
 		"id": "reroll",
 		"label": "REROLL",
 		"cost": GameController.SKILL_REROLL_COST,
-		"cost_short": "3K",
+		"cost_short": "10K",
 		"rect": Rect2(174.0, 148.0, 108.0, 78.0),
 		"accent": Color("#2EEB98"),
 		"bg": Color("#0F3132"),
@@ -44,7 +44,7 @@ const SKILL_BUTTON_SPECS: Array[Dictionary] = [
 		"id": "bomb",
 		"label": "BOMB",
 		"cost": GameController.SKILL_BOMB_COST,
-		"cost_short": "6K",
+		"cost_short": "15K",
 		"rect": Rect2(291.0, 148.0, 108.0, 78.0),
 		"accent": Color("#FF8A2B"),
 		"bg": Color("#38191D"),
@@ -53,7 +53,7 @@ const SKILL_BUTTON_SPECS: Array[Dictionary] = [
 		"id": "lightning",
 		"label": "ZAP +",
 		"cost": GameController.SKILL_LIGHTNING_COST,
-		"cost_short": "12K",
+		"cost_short": "25K",
 		"rect": Rect2(408.0, 148.0, 108.0, 78.0),
 		"accent": Color("#24E8FF"),
 		"bg": Color("#122652"),
@@ -95,6 +95,11 @@ var _hold_piece: PieceCatalog.Piece = null
 var _hold_used_this_turn: bool = false
 var _hold_playable: bool = true
 var _wallet_coins: int = 0
+var _skill_uses_left: Array[int] = [
+	GameController.SKILL_REROLL_MAX_USES,
+	GameController.SKILL_BOMB_MAX_USES,
+	GameController.SKILL_LIGHTNING_MAX_USES,
+]
 var _skill_flash_timers: Array[float] = [0.0, 0.0, 0.0]
 var _input_enabled: bool = true
 
@@ -383,6 +388,9 @@ func sync_from_controller(controller: GameController) -> void:
 	_hold_playable = controller.is_hold_piece_playable()
 	if controller.save_manager != null:
 		_wallet_coins = controller.save_manager.coins
+	_skill_uses_left[0] = controller.skill_reroll_left
+	_skill_uses_left[1] = controller.skill_bomb_left
+	_skill_uses_left[2] = controller.skill_lightning_left
 
 	# Cancel active user drag cleanly if the underlying source piece vanished externally.
 	if _is_dragging and not _programmatic_drag:
@@ -1043,7 +1051,8 @@ func _draw_skill_buttons() -> void:
 		var base_rect: Rect2 = spec["rect"] as Rect2
 		var accent: Color = spec["accent"] as Color
 		var base_bg: Color = spec["bg"] as Color
-		var can_afford: bool = _wallet_coins >= cost
+		var uses_left: int = _skill_uses_left[i] if i < _skill_uses_left.size() else 0
+		var is_usable: bool = uses_left > 0 and _wallet_coins >= cost
 		var flash: float = _skill_flash_timers[i]
 
 		var scale_s: float = 1.0 - flash * 0.06
@@ -1052,13 +1061,29 @@ func _draw_skill_buttons() -> void:
 
 		# Shadow + 3D glass skill pill
 		_sb_hold_shadow.draw(cid, Rect2(rect.position + Vector2(0.0, 4.5), rect.size))
-		_sb_hold_outer.bg_color = (base_bg.lightened(flash * 0.28) if can_afford else Color(0.06, 0.08, 0.16, 0.62))
-		_sb_hold_outer.border_color = (accent.lerp(Color.WHITE, flash * 0.65) if can_afford else Color(0.28, 0.34, 0.52, 0.45))
+		_sb_hold_outer.bg_color = (base_bg.lightened(flash * 0.28) if is_usable else Color(0.06, 0.08, 0.16, 0.62))
+		_sb_hold_outer.border_color = (accent.lerp(Color.WHITE, flash * 0.65) if is_usable else Color(0.28, 0.34, 0.52, 0.45))
 		_sb_hold_outer.draw(cid, rect)
+
+		# Top-right remaining-uses micro badge (×1 / ×3 / 0)
+		var badge_r := Rect2(rect.end.x - 29.0, rect.position.y + 4.0, 24.0, 16.0)
+		_sb_hold_tag.bg_color = Color(0.06, 0.12, 0.26, 0.90) if uses_left > 0 else Color(0.18, 0.08, 0.12, 0.85)
+		_sb_hold_tag.border_color = accent if uses_left > 0 else Color("#7A3A48")
+		_sb_hold_tag.draw(cid, badge_r)
+		_draw_centered_text(
+			self,
+			font_eb,
+			badge_r.get_center() + Vector2(0.0, 0.5),
+			("×%d" % uses_left) if uses_left > 0 else "0",
+			9,
+			Color("#FFFFFF") if uses_left > 0 else Color("#FF8A98"),
+			Color("#070C20"),
+			2
+		)
 
 		# Icon in upper half
 		var ic := Vector2(rect.get_center().x, rect.position.y + 23.0)
-		var icon_alpha := 1.0 if can_afford else 0.45
+		var icon_alpha := 1.0 if is_usable else (0.55 if uses_left > 0 else 0.28)
 		if sid == "reroll":
 			var r_col := Color(accent.r, accent.g, accent.b, icon_alpha)
 			draw_arc(ic, 11.0, -PI * 0.85, PI * 0.55, 16, r_col, 2.8, true)
@@ -1079,26 +1104,38 @@ func _draw_skill_buttons() -> void:
 			Vector2(rect.get_center().x, rect.position.y + 46.5),
 			label,
 			11,
-			Color("#FFFFFF") if can_afford else Color("#7B88AD"),
+			Color("#FFFFFF") if is_usable else Color("#7B88AD"),
 			Color("#070C20"),
 			3
 		)
 
-		# Gold Coin Cost pill along bottom
+		# Gold Coin Cost pill along bottom (or USED when 0 uses left)
 		var cost_y := rect.end.y - 12.5
-		var cc := Vector2(rect.get_center().x - 16.0, cost_y)
-		draw_circle(cc, 5.2, Color("#8C4400") if can_afford else Color("#303A58"))
-		draw_circle(cc, 4.1, Color("#FFD43B") if can_afford else Color("#627094"))
-		_draw_centered_text(
-			self,
-			font_eb,
-			Vector2(rect.get_center().x + 6.0, cost_y + 0.5),
-			cost_short,
-			11,
-			Color("#FFE866") if can_afford else Color("#7987AC"),
-			Color("#1A0D00"),
-			3
-		)
+		if uses_left <= 0:
+			_draw_centered_text(
+				self,
+				font_eb,
+				Vector2(rect.get_center().x, cost_y + 0.5),
+				"USED",
+				10,
+				Color("#FF8A98"),
+				Color("#1A080C"),
+				3
+			)
+		else:
+			var cc := Vector2(rect.get_center().x - 18.0, cost_y)
+			draw_circle(cc, 5.2, Color("#8C4400") if is_usable else Color("#303A58"))
+			draw_circle(cc, 4.1, Color("#FFD43B") if is_usable else Color("#627094"))
+			_draw_centered_text(
+				self,
+				font_eb,
+				Vector2(rect.get_center().x + 6.0, cost_y + 0.5),
+				cost_short,
+				11,
+				Color("#FFE866") if is_usable else Color("#7987AC"),
+				Color("#1A0D00"),
+				3
+			)
 
 
 func _draw_coin_wallet_pill() -> void:
