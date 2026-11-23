@@ -15,6 +15,7 @@ signal drag_dropped_on_board(source_type: String, slot_idx: int, origin_cell: Ve
 signal drag_dropped_on_hold(slot_idx: int)
 signal drag_cancelled()
 signal hold_tapped()
+signal skill_pressed(skill_id: String)
 
 const DEFAULT_RECT: Rect2 = Rect2(0.0, 680.0, 540.0, 268.0)
 const TRAY_SIZE: int = GameController.TRAY_SIZE
@@ -26,8 +27,38 @@ const SLOT_Y: float = 2.0
 const SLOT_LEFT_MARGIN: float = 24.0
 const SLOT_GAP: float = 12.0
 
-const HOLD_RECT: Rect2 = Rect2(172.0, 150.0, 196.0, 78.0)
-const HOLD_HIT_GROW: float = 16.0
+const HOLD_RECT: Rect2 = Rect2(24.0, 148.0, 140.0, 78.0)
+const HOLD_HIT_GROW: float = 14.0
+
+const SKILL_BUTTON_SPECS: Array[Dictionary] = [
+	{
+		"id": "reroll",
+		"label": "REROLL",
+		"cost": GameController.SKILL_REROLL_COST,
+		"cost_short": "3K",
+		"rect": Rect2(174.0, 148.0, 108.0, 78.0),
+		"accent": Color("#2EEB98"),
+		"bg": Color("#0F3132"),
+	},
+	{
+		"id": "bomb",
+		"label": "BOMB",
+		"cost": GameController.SKILL_BOMB_COST,
+		"cost_short": "6K",
+		"rect": Rect2(291.0, 148.0, 108.0, 78.0),
+		"accent": Color("#FF8A2B"),
+		"bg": Color("#38191D"),
+	},
+	{
+		"id": "lightning",
+		"label": "ZAP +",
+		"cost": GameController.SKILL_LIGHTNING_COST,
+		"cost_short": "12K",
+		"rect": Rect2(408.0, 148.0, 108.0, 78.0),
+		"accent": Color("#24E8FF"),
+		"bg": Color("#122652"),
+	},
+]
 
 # Drag & feel tuning
 const DEFAULT_BOARD_CELL_SIZE: float = 57.5
@@ -63,6 +94,8 @@ var _slot_playable: Array[bool] = [true, true, true]
 var _hold_piece: PieceCatalog.Piece = null
 var _hold_used_this_turn: bool = false
 var _hold_playable: bool = true
+var _wallet_coins: int = 0
+var _skill_flash_timers: Array[float] = [0.0, 0.0, 0.0]
 var _input_enabled: bool = true
 
 var _time: float = 0.0
@@ -315,6 +348,11 @@ func _process(delta: float) -> void:
 			_return_active = false
 			_return_piece = null
 
+	for si: int in range(_skill_flash_timers.size()):
+		if _skill_flash_timers[si] > 0.0:
+			_skill_flash_timers[si] = maxf(0.0, _skill_flash_timers[si] - delta * 3.8)
+			dirty = true
+
 	if dirty:
 		queue_redraw()
 	if overlay_dirty and _drag_overlay != null:
@@ -343,6 +381,8 @@ func sync_from_controller(controller: GameController) -> void:
 	_hold_piece = controller.hold_piece
 	_hold_used_this_turn = controller.hold_used_this_turn
 	_hold_playable = controller.is_hold_piece_playable()
+	if controller.save_manager != null:
+		_wallet_coins = controller.save_manager.coins
 
 	# Cancel active user drag cleanly if the underlying source piece vanished externally.
 	if _is_dragging and not _programmatic_drag:
@@ -582,7 +622,7 @@ func _try_begin_press(local_pos: Vector2, pointer_id: int) -> bool:
 			return true
 
 	# 2. Check the HOLD Dock.
-	var hold_hit: Rect2 = HOLD_RECT.grow(8.0)
+	var hold_hit: Rect2 = HOLD_RECT.grow(6.0)
 	if hold_hit.has_point(local_pos):
 		if _hold_piece != null:
 			_begin_drag("hold", -1, _hold_piece, global_pos, pointer_id)
@@ -594,6 +634,16 @@ func _try_begin_press(local_pos: Vector2, pointer_id: int) -> bool:
 			_pending_tap_start_time = _time
 			_hold_tap_pulse = 1.0
 			queue_redraw()
+			return true
+
+	# 3. Check the 3 Coin Power-Up Skill Buttons.
+	for i: int in range(SKILL_BUTTON_SPECS.size()):
+		var spec: Dictionary = SKILL_BUTTON_SPECS[i]
+		var srect: Rect2 = (spec["rect"] as Rect2).grow(3.0)
+		if srect.has_point(local_pos):
+			_skill_flash_timers[i] = 1.0
+			queue_redraw()
+			skill_pressed.emit(String(spec["id"]))
 			return true
 
 	return false
@@ -781,6 +831,8 @@ func _draw() -> void:
 	for i: int in range(TRAY_SIZE):
 		_draw_tray_slot(i)
 	_draw_hold_dock()
+	_draw_skill_buttons()
+	_draw_coin_wallet_pill()
 
 
 func _draw_tray_slot(slot_idx: int) -> void:
@@ -886,8 +938,8 @@ func _draw_hold_dock() -> void:
 	_sb_hold_inner.bg_color = Color(0.075, 0.115, 0.265, 0.50).lerp(Color(0.11, 0.23, 0.42, 0.66), _hold_hover_blend)
 	_sb_hold_inner.draw(cid, inner_rect)
 
-	# 4. Crisp integrated inline "HOLD" micro-pill on left side (no chunky protruding top tab!).
-	var tag_rect: Rect2 = Rect2(dock_rect.position.x + 10.0, center.y - 12.0, 50.0, 24.0)
+	# 4. Crisp integrated inline "HOLD" micro-pill anchored neatly at top-left inside compact dock.
+	var tag_rect: Rect2 = Rect2(dock_rect.position.x + 8.0, dock_rect.position.y + 6.0, 48.0, 19.0)
 	_sb_hold_tag.bg_color = Color(0.09, 0.16, 0.36, 0.85) if not _hold_used_this_turn else Color(0.11, 0.13, 0.24, 0.75)
 	_sb_hold_tag.border_color = border_col
 	_sb_hold_tag.draw(cid, tag_rect)
@@ -896,28 +948,28 @@ func _draw_hold_dock() -> void:
 		TilePainter.get_badge_font(),
 		tag_rect.get_center() + Vector2(0.0, 0.5),
 		"HOLD",
-		11,
+		10,
 		Color("#8D97BA") if _hold_used_this_turn else Color("#E2F8FF").lerp(Color("#FFF7B2"), _hold_hover_blend),
 		Color("#070C20"),
 		3
 	)
 
-	# 5. Vault interior content centered cleanly between HOLD pill and right swap icon.
-	var content_center: Vector2 = Vector2(center.x + 8.0, center.y)
+	# 5. Vault interior content centered cleanly in the lower center of HOLD dock.
+	var content_center: Vector2 = Vector2(center.x, center.y + 9.0)
 	if _hold_piece != null:
-		var hold_cell: float = _get_hold_cell_size(_hold_piece)
+		var hold_cell: float = minf(16.0, _get_hold_cell_size(_hold_piece))
 		if is_dragging_hold:
 			_draw_piece_silhouette(self, _hold_piece, content_center, hold_cell, Color(1.0, 1.0, 1.0, 0.15))
 		elif not is_returning_hold:
 			var piece_alpha: float = 1.0 if _hold_playable else 0.42
-			var sp_bob: float = -1.6 * sin(_time * 3.4) if _hold_piece.is_special() else 0.0
+			var sp_bob: float = -1.4 * sin(_time * 3.4) if _hold_piece.is_special() else 0.0
 			var sp_scale: float = (1.0 + 0.04 * sin(_time * 4.8)) if _hold_piece.is_special() else 1.0
 			var draw_pos: Vector2 = content_center + Vector2(0.0, sp_bob)
 			var draw_cell: float = hold_cell * sp_scale
 			if _hold_piece.is_special():
 				var sp_glow: Color = Color(1.0, 0.42, 0.16, 0.40) if _hold_piece.special_type == PieceCatalog.SPECIAL_BOMB else Color(0.18, 0.90, 1.0, 0.42)
-				_draw_soft_glow(self, draw_pos, Vector2(36.0, 36.0), sp_glow)
-			_draw_piece_grounded_shadow(self, _hold_piece, draw_pos, draw_cell, Vector2(0.0, 3.5), 0.46 * piece_alpha)
+				_draw_soft_glow(self, draw_pos, Vector2(30.0, 30.0), sp_glow)
+			_draw_piece_grounded_shadow(self, _hold_piece, draw_pos, draw_cell, Vector2(0.0, 3.0), 0.46 * piece_alpha)
 			_draw_piece_cells(self, _hold_piece, draw_pos, draw_cell, piece_alpha, 0.0)
 			if not _hold_playable:
 				_draw_piece_silhouette(self, _hold_piece, draw_pos, draw_cell, Color(0.11, 0.15, 0.29, 0.30))
@@ -926,16 +978,16 @@ func _draw_hold_dock() -> void:
 		_draw_centered_text(
 			self,
 			TilePainter.get_bold_font(),
-			content_center + Vector2(4.0, 0.5),
+			content_center,
 			"DROP PIECE",
-			12,
+			11,
 			prompt_col,
 			Color(0.03, 0.05, 0.14, 0.55),
 			2
 		)
 
-	# 6. Sleek swap/lock status icon anchored neatly on the right inside the glass pill.
-	var icon_center: Vector2 = Vector2(dock_rect.end.x - 22.0, center.y)
+	# 6. Sleek swap/lock status icon anchored neatly at top-right inside the glass pill.
+	var icon_center: Vector2 = Vector2(dock_rect.end.x - 16.0, dock_rect.position.y + 15.5)
 	var icon_rim: Color = COL_HOLD_LOCKED if _hold_used_this_turn else COL_HOLD_CYAN.lerp(COL_HOLD_GOLD, _hold_hover_blend * 0.6)
 	icon_rim.a = 0.55 if _hold_used_this_turn else 0.82
 	if _hold_used_this_turn:
@@ -977,6 +1029,101 @@ func _draw_hold_dock() -> void:
 			Color("#220A0E"),
 			3
 		)
+
+
+func _draw_skill_buttons() -> void:
+	var cid: RID = get_canvas_item()
+	var font_eb := TilePainter.get_badge_font()
+	for i: int in range(SKILL_BUTTON_SPECS.size()):
+		var spec: Dictionary = SKILL_BUTTON_SPECS[i]
+		var sid: String = String(spec["id"])
+		var label: String = String(spec["label"])
+		var cost: int = int(spec["cost"])
+		var cost_short: String = String(spec["cost_short"])
+		var base_rect: Rect2 = spec["rect"] as Rect2
+		var accent: Color = spec["accent"] as Color
+		var base_bg: Color = spec["bg"] as Color
+		var can_afford: bool = _wallet_coins >= cost
+		var flash: float = _skill_flash_timers[i]
+
+		var scale_s: float = 1.0 - flash * 0.06
+		var c: Vector2 = base_rect.get_center()
+		var rect: Rect2 = Rect2(c - base_rect.size * scale_s * 0.5, base_rect.size * scale_s)
+
+		# Shadow + 3D glass skill pill
+		_sb_hold_shadow.draw(cid, Rect2(rect.position + Vector2(0.0, 4.5), rect.size))
+		_sb_hold_outer.bg_color = (base_bg.lightened(flash * 0.28) if can_afford else Color(0.06, 0.08, 0.16, 0.62))
+		_sb_hold_outer.border_color = (accent.lerp(Color.WHITE, flash * 0.65) if can_afford else Color(0.28, 0.34, 0.52, 0.45))
+		_sb_hold_outer.draw(cid, rect)
+
+		# Icon in upper half
+		var ic := Vector2(rect.get_center().x, rect.position.y + 23.0)
+		var icon_alpha := 1.0 if can_afford else 0.45
+		if sid == "reroll":
+			var r_col := Color(accent.r, accent.g, accent.b, icon_alpha)
+			draw_arc(ic, 11.0, -PI * 0.85, PI * 0.55, 16, r_col, 2.8, true)
+			var tip_a := ic + Vector2(cos(PI * 0.55), sin(PI * 0.55)) * 11.0
+			draw_colored_polygon(PackedVector2Array([tip_a + Vector2(4.5, -1.0), tip_a + Vector2(-4.0, -4.5), tip_a + Vector2(-2.0, 4.5)]), r_col)
+			draw_arc(ic, 11.0, PI * 0.15, PI * 1.55, 16, Color(0.75, 1.0, 0.92, icon_alpha * 0.85), 2.2, true)
+		elif sid == "bomb":
+			var br := Rect2(ic - Vector2(13.0, 13.0), Vector2(26.0, 26.0))
+			TilePainter.draw_special_tile(self, br, TilePainter.SPECIAL_BOMB, _time, icon_alpha)
+		else:
+			var lr := Rect2(ic - Vector2(13.0, 13.0), Vector2(26.0, 26.0))
+			TilePainter.draw_special_tile(self, lr, TilePainter.SPECIAL_LIGHTNING, _time, icon_alpha)
+
+		# Skill name
+		_draw_centered_text(
+			self,
+			font_eb,
+			Vector2(rect.get_center().x, rect.position.y + 46.5),
+			label,
+			11,
+			Color("#FFFFFF") if can_afford else Color("#7B88AD"),
+			Color("#070C20"),
+			3
+		)
+
+		# Gold Coin Cost pill along bottom
+		var cost_y := rect.end.y - 12.5
+		var cc := Vector2(rect.get_center().x - 16.0, cost_y)
+		draw_circle(cc, 5.2, Color("#8C4400") if can_afford else Color("#303A58"))
+		draw_circle(cc, 4.1, Color("#FFD43B") if can_afford else Color("#627094"))
+		_draw_centered_text(
+			self,
+			font_eb,
+			Vector2(rect.get_center().x + 6.0, cost_y + 0.5),
+			cost_short,
+			11,
+			Color("#FFE866") if can_afford else Color("#7987AC"),
+			Color("#1A0D00"),
+			3
+		)
+
+
+func _draw_coin_wallet_pill() -> void:
+	var cid: RID = get_canvas_item()
+	var coin_txt: String = HudView.format_comma_int(_wallet_coins)
+	var pill_w: float = clampf(44.0 + float(coin_txt.length()) * 9.0, 88.0, 156.0)
+	var pill_r := Rect2((size.x - pill_w) * 0.5, 234.0, pill_w, 25.0)
+	_sb_hold_tag.bg_color = Color(0.04, 0.07, 0.18, 0.86)
+	_sb_hold_tag.border_color = Color("#FFD43B", 0.72)
+	_sb_hold_tag.draw(cid, pill_r)
+
+	var cc := Vector2(pill_r.position.x + 14.0, pill_r.get_center().y)
+	draw_circle(cc, 6.2, Color("#A85200"))
+	draw_circle(cc, 4.8, Color("#FFD43B"))
+	draw_circle(cc + Vector2(-1.2, -1.2), 1.7, Color("#FFF7BD"))
+	_draw_centered_text(
+		self,
+		TilePainter.get_badge_font(),
+		Vector2(pill_r.get_center().x + 8.0, pill_r.get_center().y + 0.5),
+		coin_txt,
+		12,
+		Color("#FFE866"),
+		Color("#241000"),
+		3
+	)
 
 
 # ==============================================================================

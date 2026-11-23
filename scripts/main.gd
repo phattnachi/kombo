@@ -709,6 +709,7 @@ func _init_controller_and_signals() -> void:
 	tray_view.drag_dropped_on_hold.connect(_on_drag_dropped_on_hold)
 	tray_view.drag_cancelled.connect(_on_drag_cancelled)
 	tray_view.hold_tapped.connect(_on_hold_tapped)
+	tray_view.skill_pressed.connect(_on_skill_pressed)
 
 	hud_view.audio_toggled.connect(_on_audio_toggled)
 	hud_view.restart_requested.connect(_on_restart_requested)
@@ -804,6 +805,41 @@ func _on_drag_cancelled() -> void:
 
 func _on_hold_tapped() -> void:
 	sound_synth.play_pickup()
+
+
+func _on_skill_pressed(skill_id: String) -> void:
+	if is_processing_ad or controller == null or controller.is_game_over:
+		return
+	var res := controller.buy_skill(skill_id)
+	if not bool(res.get("success", false)):
+		sound_synth.play_invalid()
+		_vibrate(15)
+		var reason := String(res.get("reason", ""))
+		var msg := "NEED MORE COINS!" if reason == "insufficient_coins" else "SLOTS FULL!"
+		vfx_layer.spawn_floating_text(Vector2(270.0, 650.0), msg, Color("#FF9EA8"), 20, 0.0, Color("#6E1424"))
+		return
+
+	var cost := int(res.get("cost", 0))
+	var slot := int(res.get("slot", -2))
+	if skill_id == "reroll":
+		tray_view.animate_tray_refill()
+		sound_synth.play_combo_clear(4, 2, false)
+		_vibrate(25)
+		vfx_layer.spawn_floating_text(Vector2(270.0, 646.0), "REROLL!  -%s" % HudView.format_comma_int(cost), Color("#98FFCC"), 22, 0.0, Color("#0E5A4C"))
+	elif skill_id == "bomb":
+		if slot >= 0:
+			tray_view.animate_special_award(slot)
+		sound_synth.play_mult_hit(2)
+		_vibrate(35)
+		vfx_layer.spawn_floating_text(Vector2(270.0, 646.0), "BOMB READY!  -%s" % HudView.format_comma_int(cost), Color("#FFB466"), 22, 0.0, Color("#7A2412"))
+	elif skill_id == "lightning":
+		if slot >= 0:
+			tray_view.animate_special_award(slot)
+		sound_synth.play_mult_hit(3)
+		_vibrate(45)
+		vfx_layer.spawn_floating_text(Vector2(270.0, 646.0), "LIGHTNING READY!  -%s" % HudView.format_comma_int(cost), Color("#80F4FF"), 22, 0.0, Color("#143E8A"))
+
+	_persist_active_run_if_needed()
 
 
 func _apply_saved_settings() -> void:

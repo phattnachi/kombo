@@ -1126,6 +1126,28 @@ func _test_high_score_and_persistence() -> void:
 	_assert_true(String(th_msgs[0]["title"]).contains("เล่นเร็วๆ"), "Thai quick-break notification title present")
 	nm.free()
 
+	# F. Coin-Powered Helper Skills (Reroll, Bomb, Lightning)
+	var sm_sk := SaveManager.new(TEST_SAVE_PATH)
+	sm_sk.delete_save_file()
+	var gc_sk := GameController.new(sm_sk, 777)
+	gc_sk.start_new_game(777)
+	var fail_res := gc_sk.buy_skill("reroll")
+	_assert_eq(fail_res["success"], false, "Cannot buy Reroll skill with 0 coins")
+	_assert_eq(fail_res["reason"], "insufficient_coins", "Proper insufficient_coins reason")
+	sm_sk.add_coins(25000)
+	var rr := gc_sk.buy_skill("reroll")
+	_assert_eq(rr["success"], true, "Bought Reroll skill for 3,000 coins")
+	_assert_eq(sm_sk.coins, 22000, "22,000 coins left after Reroll")
+	var bm := gc_sk.buy_skill("bomb")
+	_assert_eq(bm["success"], true, "Bought Bomb skill for 6,000 coins")
+	_assert_eq(sm_sk.coins, 16000, "16,000 coins left after Bomb")
+	_assert_true(gc_sk.hold_piece != null and gc_sk.hold_piece.special_type == PieceCatalog.SPECIAL_BOMB, "Bomb placed in empty Hold when all 3 tray slots full")
+	var lt := gc_sk.buy_skill("lightning")
+	_assert_eq(lt["success"], true, "Bought Lightning skill for 12,000 coins")
+	_assert_eq(sm_sk.coins, 4000, "4,000 coins left after Lightning")
+	var lt_slot := int(lt["slot"])
+	_assert_true(lt_slot >= 0 and gc_sk.tray[lt_slot] != null and gc_sk.tray[lt_slot].special_type == PieceCatalog.SPECIAL_LIGHTNING, "Lightning replaced largest non-special tray piece")
+
 
 # ------------------------------------------------------------------------------
 # 14. Full Multi-Game Simulation & MoveResult Schema / Invariants

@@ -21,6 +21,10 @@ const SAVE_MILESTONE_STEP := 2500
 const SPRINT_TOTAL_TRAYS := 20
 const SPRINT_TOTAL_MOVES := 60
 
+const SKILL_REROLL_COST := 3000
+const SKILL_BOMB_COST := 6000
+const SKILL_LIGHTNING_COST := 12000
+
 var board: BoardState
 var score_engine: ScoreEngine
 var save_manager: SaveManager
@@ -768,6 +772,88 @@ func recheck_game_over() -> bool:
 
 func deal_fresh_tray() -> Array[PieceCatalog.Piece]:
 	return _deal_fresh_tray_internal(true)
+
+
+func buy_skill(skill_id: String) -> Dictionary:
+	if is_game_over:
+		return {"success": false, "reason": "game_over"}
+	if save_manager == null:
+		return {"success": false, "reason": "no_wallet"}
+
+	if skill_id == "reroll":
+		if save_manager.coins < SKILL_REROLL_COST:
+			return {"success": false, "reason": "insufficient_coins", "cost": SKILL_REROLL_COST}
+		var replaceable_slots: Array[int] = []
+		for i in range(TRAY_SIZE):
+			if tray[i] == null or not tray[i].is_special():
+				replaceable_slots.append(i)
+		if replaceable_slots.is_empty():
+			return {"success": false, "reason": "no_slot"}
+		if not save_manager.spend_coins(SKILL_REROLL_COST):
+			return {"success": false, "reason": "insufficient_coins", "cost": SKILL_REROLL_COST}
+		var used_ids: Array[String] = []
+		for idx in replaceable_slots:
+			var np := PieceCatalog.create_random_piece(rng, used_ids)
+			tray[idx] = np
+			used_ids.append(np.id)
+		_apply_smart_deal_guarantee()
+		tray_refilled.emit(get_tray_snapshot())
+		state_changed.emit()
+		return {
+			"success": true,
+			"skill_id": "reroll",
+			"cost": SKILL_REROLL_COST,
+			"slot": -2,
+			"remaining_coins": save_manager.coins,
+		}
+
+	if skill_id == "bomb" or skill_id == "lightning":
+		var sp_type := PieceCatalog.SPECIAL_BOMB if skill_id == "bomb" else PieceCatalog.SPECIAL_LIGHTNING
+		var cost := SKILL_BOMB_COST if skill_id == "bomb" else SKILL_LIGHTNING_COST
+		if save_manager.coins < cost:
+			return {"success": false, "reason": "insufficient_coins", "cost": cost}
+
+		# Smart placement priority: 1) empty tray slot, 2) empty Hold, 3) largest non-special tray slot, 4) upgrade Bomb->Lightning.
+		var target_slot := -2 # -2 = none, -1 = hold, 0..2 = tray
+		for i in range(TRAY_SIZE):
+			if tray[i] == null:
+				target_slot = i
+				break
+		if target_slot == -2 and hold_piece == null:
+			target_slot = -1
+		if target_slot == -2:
+			var best_cells := -1
+			for i in range(TRAY_SIZE):
+				if tray[i] != null and not tray[i].is_special() and tray[i].cells.size() > best_cells:
+					best_cells = tray[i].cells.size()
+					target_slot = i
+		if target_slot == -2 and sp_type == PieceCatalog.SPECIAL_LIGHTNING:
+			for i in range(TRAY_SIZE):
+				if tray[i] != null and tray[i].special_type == PieceCatalog.SPECIAL_BOMB:
+					target_slot = i
+					break
+		if target_slot == -2:
+			return {"success": false, "reason": "no_slot"}
+
+		if not save_manager.spend_coins(cost):
+			return {"success": false, "reason": "insufficient_coins", "cost": cost}
+
+		var sp_piece := PieceCatalog.create_special_piece(sp_type)
+		if target_slot == -1:
+			hold_piece = sp_piece
+			hold_changed.emit(hold_piece)
+		else:
+			tray[target_slot] = sp_piece
+		state_changed.emit()
+		return {
+			"success": true,
+			"skill_id": skill_id,
+			"cost": cost,
+			"slot": target_slot,
+			"remaining_coins": save_manager.coins,
+		}
+
+	return {"success": false, "reason": "unknown_skill"}
 
 
 func _deal_fresh_tray_internal(emit_signal: bool) -> Array[PieceCatalog.Piece]:

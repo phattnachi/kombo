@@ -256,6 +256,17 @@ func add_coins(amount: int) -> int:
 	return coins
 
 
+func spend_coins(amount: int) -> bool:
+	var cost := maxi(0, amount)
+	if cost == 0:
+		return true
+	if coins < cost:
+		return false
+	coins -= cost
+	save_data()
+	return true
+
+
 func is_skin_unlocked(skin_id: String) -> bool:
 	return skin_id == "jewel" or unlocked_skins.has(skin_id)
 
