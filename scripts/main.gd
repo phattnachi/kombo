@@ -1439,6 +1439,42 @@ func _on_move_resolved(result: Dictionary) -> void:
 		if lines_cleared >= 2 or combo_streak >= 2 or fever_just_ignited:
 			vfx_layer.spawn_combo_banner(board_center_local, combo_streak, lines_cleared, fever_just_ignited)
 
+	# 4B. PERFECT CLEAR (ALL CLEAR) — Wiped the entire 8x8 board!
+	if bool(result.get("all_clear", false)):
+		var ac_bonus := int(result.get("all_clear_bonus", 0))
+		var ac_coins := int(result.get("all_clear_coins", 0))
+		board_view.trigger_clear_flash(1.0, Color("#FFE44D"))
+		vfx_layer.add_trauma(0.55)
+		var corner_origins: Array[Vector2] = [
+			board_inner_local.position + Vector2(32.0, 32.0),
+			Vector2(board_inner_local.end.x - 32.0, board_inner_local.position.y + 32.0),
+			Vector2(board_inner_local.position.x + 32.0, board_inner_local.end.y - 32.0),
+			board_inner_local.end - Vector2(32.0, 32.0),
+			board_center_local,
+		]
+		for corner_pos in corner_origins:
+			vfx_layer.spawn_cell_shatter(corner_pos, 1, cell_size * 1.15, 6)
+		vfx_layer.spawn_floating_text(
+			Vector2(270.0, 336.0),
+			"ALL CLEAR!",
+			Color("#FFF8A8"),
+			42,
+			-2.2,
+			Color("#B84A00")
+		)
+		vfx_layer.spawn_floating_text(
+			Vector2(270.0, 396.0),
+			"+%s BONUS  •  +%s COINS" % [HudView.format_comma_int(ac_bonus), HudView.format_comma_int(ac_coins)],
+			Color("#FFE866"),
+			19,
+			1.4,
+			Color("#143A7A")
+		)
+		sound_synth.play_high_score()
+		_vibrate(85)
+		if bgm_manager != null:
+			bgm_manager.duck(4.5, 0.45, 0.75)
+
 	# 5. Special block reward burst into tray slot!
 	if awarded_special != PieceCatalog.SpecialType.NORMAL and awarded_slot >= 0:
 		tray_view.animate_special_award(awarded_slot)
@@ -1480,8 +1516,8 @@ func _on_move_resolved(result: Dictionary) -> void:
 			bgm_manager.duck(4.5, 0.45, 0.75)
 		vfx_layer.spawn_floating_text(Vector2(270.0, 126.0), "NEW RECORD!", Color("#FFE45C"), 26, -2.5, Color("#A85B00"))
 
-	# 7. Throttled auto-persist (save every 6 turns, on stage clear, or on game over to prevent per-move disk/IndexedDB lag).
-	if controller.is_game_over or bool(result.get("stage_cleared", false)) or (controller.turn_count % 6 == 0):
+	# 7. Throttled auto-persist (save every 6 turns, on stage clear, all clear, or on game over to prevent per-move disk/IndexedDB lag).
+	if controller.is_game_over or bool(result.get("stage_cleared", false)) or bool(result.get("all_clear", false)) or (controller.turn_count % 6 == 0):
 		_persist_active_run_if_needed()
 
 

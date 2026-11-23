@@ -853,19 +853,40 @@ func _resolve_placement(
 		avoid_mult_cells.append(m["cell"] as Vector2i)
 	var spawned_multipliers: Array[Dictionary] = []
 	var did_real_clear := lines_cleared > 0 or not blast_cells.is_empty()
+
+	# PERFECT CLEAR (ALL CLEAR): clearing every remaining block off the 8x8 board!
+	var all_clear := did_real_clear and board.get_occupied_count() == 0
+	var all_clear_bonus := 0
+	var all_clear_coins := 0
+	if all_clear:
+		var ac_mult := maxf(1.0, float(score_res["total_mult"]))
+		all_clear_bonus = int(round(float(ScoreEngine.ALL_CLEAR_BONUS_BASE) * ac_mult))
+		var ac_add := score_engine.add_bonus_points(all_clear_bonus)
+		score_res["points_earned"] = int(score_res["points_earned"]) + all_clear_bonus
+		score_res["new_score"] = int(ac_add["new_score"])
+		score_res["high_score"] = int(ac_add["high_score"])
+		score_res["is_new_high_score"] = bool(ac_add["is_new_high_score"])
+		if bool(ac_add["just_beat_high_score"]):
+			score_res["just_beat_high_score"] = true
+		all_clear_coins = ScoreEngine.ALL_CLEAR_BONUS_COINS
+		if save_manager != null:
+			save_manager.add_coins(all_clear_coins)
+
 	var active_mult_rng := _daily_mult_rng if (game_mode == GameMode.DAILY and _daily_mult_rng != null) else rng
 	if did_real_clear:
 		spawned_multipliers = board.replenish_multipliers(active_mult_rng, 2, avoid_mult_cells)
 	elif turn_count % 4 == 0 and board.get_active_multiplier_cells().size() < BoardState.MAX_ACTIVE_MULTIPLIERS:
 		spawned_multipliers = board.replenish_multipliers(active_mult_rng, 1, avoid_mult_cells)
 
-	# Award Bomb (2 lines) or Lightning (3+ lines) immediately into emptied tray slot or queue.
+	# Award Bomb (2 lines or All Clear) or Lightning (3+ lines) immediately into emptied tray slot or queue.
 	var awarded_special := PieceCatalog.SPECIAL_NORMAL
 	var awarded_slot := -1
 	if lines_cleared == 2:
 		awarded_special = PieceCatalog.SPECIAL_BOMB
 	elif lines_cleared >= 3:
 		awarded_special = PieceCatalog.SPECIAL_LIGHTNING
+	elif all_clear:
+		awarded_special = PieceCatalog.SPECIAL_BOMB
 
 	if awarded_special != PieceCatalog.SPECIAL_NORMAL:
 		var special_piece := PieceCatalog.create_special_piece(awarded_special)
@@ -924,10 +945,10 @@ func _resolve_placement(
 	else:
 		is_game_over = not can_continue()
 
-	# Throttled persistence: save on first PB beat, Stage Clear, Game Over, or >=500-point milestones.
+	# Throttled persistence: save on first PB beat, Stage Clear, All Clear, Game Over, or >=500-point milestones.
 	var just_beat_high := bool(score_res["just_beat_high_score"])
 	var reached_milestone := (score_engine.score - _last_saved_high_score) >= SAVE_MILESTONE_STEP
-	if just_beat_high or stage_cleared or is_game_over or reached_milestone:
+	if just_beat_high or stage_cleared or all_clear or is_game_over or reached_milestone:
 		flush_save()
 
 	var result := {
@@ -942,6 +963,9 @@ func _resolve_placement(
 		"special_triggered": special_triggered,
 		"blast_origin": origin,
 		"lines_cleared": lines_cleared,
+		"all_clear": all_clear,
+		"all_clear_bonus": all_clear_bonus,
+		"all_clear_coins": all_clear_coins,
 		"base_chips": int(score_res["base_chips"]),
 		"placement_chips": int(score_res["placement_chips"]),
 		"line_chips": int(score_res["line_chips"]),

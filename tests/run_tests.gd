@@ -227,16 +227,30 @@ func _test_single_row_and_col_clear() -> void:
 	_assert_true(not gc.board.is_occupied(0, 3), "Row 3 is empty after clear")
 	_assert_true(gc.board.is_occupied(0, 0), "Other row untouched")
 
-	# Clear single column (col 2)
+	# Clear single column (col 2) with bystander block (not All Clear)
 	gc.board.clear_board()
 	_fill_col_except(gc.board, 2, [6, 7], 4)
+	gc.board.set_cell(7, 0, true, 6)
 	var r2 := gc.place_from_tray(1, Vector2i(2, 6))
 	_assert_eq(r2["lines_cleared"], 1, "Cleared 1 column")
 	_assert_eq(r2["cleared_cols"], [2] as Array[int], "Column 2 cleared")
+	_assert_eq(r2["all_clear"], false, "Non-empty board does not trigger All Clear")
 	_assert_eq(r2["combo_streak"], 2, "Second consecutive clear increments combo to 2")
 	_assert_approx(r2["combo_mult"], 1.5, 0.001, "Combo 2 mult is x1.5")
 	_assert_eq(r2["points_earned"], 975, "round(650 * 1.5) = 975")
 	_assert_true(not gc.board.is_occupied(2, 0), "Col 2 is empty after clear")
+
+	# PERFECT CLEAR (ALL CLEAR): clearing the final row wipes entire 8x8 board!
+	gc.board.clear_board()
+	_fill_row_except(gc.board, 5, [0], 2)
+	var coins_before := gc.save_manager.coins
+	var r_ac := gc.place_from_tray(2, Vector2i(0, 5))
+	_assert_eq(r_ac["all_clear"], true, "Emptying the entire 8x8 board triggers ALL CLEAR")
+	_assert_eq(r_ac["all_clear_bonus"], 20000, "All Clear bonus = 5000 * combo3(2.0) * fever(2.0) = 20000")
+	_assert_eq(r_ac["all_clear_coins"], ScoreEngine.ALL_CLEAR_BONUS_COINS, "All Clear awards +1,500 bonus coins")
+	_assert_eq(gc.save_manager.coins, coins_before + ScoreEngine.ALL_CLEAR_BONUS_COINS, "All Clear coins credited to wallet")
+	_assert_eq(r_ac["points_earned"], 2500 + 20000, "Line points (625*4=2500) + All Clear bonus (20000)")
+	_assert_eq(r_ac["awarded_special"], PieceCatalog.SPECIAL_BOMB, "Single-line All Clear awards free Bomb")
 
 
 # ------------------------------------------------------------------------------
@@ -329,6 +343,7 @@ func _test_bomb_detonation() -> void:
 
 	# B2. Bomb over origin x2 that blasts >=1 adjacent block DOES trigger origin x2!
 	gc.board.set_cell(3, 2, true, 1)
+	gc.board.set_cell(7, 7, true, 5) # Outside 3x3 bystander so non-All-Clear arithmetic is tested cleanly
 	var prev_hit := gc.preview_from_tray(2, Vector2i(3, 3))
 	_assert_eq((prev_hit["hit_multipliers"] as Array).size(), 1, "Preview shows origin x2 when blasting adjacent block")
 	var r_mult_real := gc.place_from_tray(2, Vector2i(3, 3))
@@ -581,6 +596,7 @@ func _test_multiplier_tiles() -> void:
 
 	for x in range(1, 8):
 		gc.board.set_cell(x, 5, true, 3)
+	gc.board.set_cell(7, 0, true, 4) # Bystander block (non-All-Clear multiplier arithmetic check)
 
 	var res := gc.place_from_tray(2, Vector2i(0, 5))
 	_assert_eq(res["lines_cleared"], 1, "Row 5 cleared")
@@ -709,6 +725,7 @@ func _test_fever_mode() -> void:
 	# Move 3: base=625, combo=3 (x2.0), tile=x2.0, fever=x2.0 -> total_mult=8.0 -> 5000 pts!
 	gc.board.clear_board()
 	_fill_row_except(gc.board, 0, [0], 1)
+	gc.board.set_cell(7, 7, true, 2) # Bystander block so pure FEVER arithmetic is checked
 	gc.board.set_multiplier(4, 0, 2)
 	var m3 := gc.place_from_tray(2, Vector2i(0, 0))
 	_assert_eq(m3["fever_active"], true, "Move 3 ignites FEVER")
@@ -949,6 +966,7 @@ func _test_high_score_and_persistence() -> void:
 	# Jump over 2500-point milestone in one x6 clear (3750 pts -> total 3850)
 	gc1.board.clear_board()
 	_fill_row_except(gc1.board, 2, [0], 1)
+	gc1.board.set_cell(7, 7, true, 4)
 	gc1.board.set_multiplier(3, 2, 2)
 	gc1.board.set_multiplier(5, 2, 3)
 	var m_mile := gc1.place_from_tray(1, Vector2i(0, 2)) # +3750 -> 3850
@@ -980,6 +998,7 @@ func _test_high_score_and_persistence() -> void:
 	# Clear with x2*x3 + 1 line = 3750 pts -> total 3775 (still below 3875!)
 	gc1.board.clear_board()
 	_fill_row_except(gc1.board, 3, [0], 1)
+	gc1.board.set_cell(7, 7, true, 4)
 	gc1.board.set_multiplier(2, 3, 2)
 	gc1.board.set_multiplier(4, 3, 3)
 	var close := gc1.place_from_tray(1, Vector2i(0, 3)) # 3775
@@ -989,6 +1008,7 @@ func _test_high_score_and_persistence() -> void:
 	# Clear another line -> 3775 + 938 = 4713 > 3875 -> FIRES just_beat_high_score ONCE & saves immediately!
 	gc1.board.clear_board()
 	_fill_row_except(gc1.board, 3, [0], 1)
+	gc1.board.set_cell(7, 7, true, 4)
 	var beat := gc1.place_from_tray(2, Vector2i(0, 3))
 	_assert_true(int(beat["new_score"]) > 3875, "Strictly exceeded 3875")
 	_assert_eq(beat["is_new_high_score"], true, "is_new_high_score=true after beating PB")
