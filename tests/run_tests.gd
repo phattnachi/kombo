@@ -240,17 +240,31 @@ func _test_single_row_and_col_clear() -> void:
 	_assert_eq(r2["points_earned"], 975, "round(650 * 1.5) = 975")
 	_assert_true(not gc.board.is_occupied(2, 0), "Col 2 is empty after clear")
 
-	# PERFECT CLEAR (ALL CLEAR): clearing the final row wipes entire 8x8 board!
+	# PERFECT CLEAR (ALL CLEAR) #1: clearing the final row wipes entire 8x8 board!
 	gc.board.clear_board()
 	_fill_row_except(gc.board, 5, [0], 2)
 	var coins_before := gc.save_manager.coins
 	var r_ac := gc.place_from_tray(2, Vector2i(0, 5))
 	_assert_eq(r_ac["all_clear"], true, "Emptying the entire 8x8 board triggers ALL CLEAR")
-	_assert_eq(r_ac["all_clear_bonus"], 20000, "All Clear bonus = 5000 * combo3(2.0) * fever(2.0) = 20000")
-	_assert_eq(r_ac["all_clear_coins"], ScoreEngine.ALL_CLEAR_BONUS_COINS, "All Clear awards +1,500 bonus coins")
-	_assert_eq(gc.save_manager.coins, coins_before + ScoreEngine.ALL_CLEAR_BONUS_COINS, "All Clear coins credited to wallet")
-	_assert_eq(r_ac["points_earned"], 2500 + 20000, "Line points (625*4=2500) + All Clear bonus (20000)")
-	_assert_eq(r_ac["awarded_special"], PieceCatalog.SPECIAL_BOMB, "Single-line All Clear awards free Bomb")
+	_assert_eq(r_ac["all_clear_count"], 1, "First All Clear sets all_clear_count=1")
+	_assert_eq(r_ac["all_clear_bonus"], 20000, "All Clear #1 bonus = 5000 * x1 * combo3(2.0) * fever(2.0) = 20000")
+	_assert_eq(r_ac["all_clear_coins"], ScoreEngine.ALL_CLEAR_BONUS_COINS, "All Clear #1 awards +1,500 bonus coins")
+	_assert_eq(gc.save_manager.coins, coins_before + ScoreEngine.ALL_CLEAR_BONUS_COINS, "All Clear #1 coins credited to wallet")
+	_assert_eq(r_ac["points_earned"], 2500 + 20000, "Line points (625*4=2500) + All Clear #1 bonus (20000)")
+	_assert_eq(r_ac["awarded_special"], PieceCatalog.SPECIAL_BOMB, "First single-line All Clear awards free Bomb")
+
+	# PERFECT CLEAR (ALL CLEAR) #2: stacking All Clear chain multiplies bonus x2, coins x2, and upgrades to LIGHTNING!
+	gc.board.clear_board()
+	_fill_row_except(gc.board, 6, [0], 3)
+	gc.tray[0] = PieceCatalog.create_piece_by_id("dot_1x1", 0)
+	var coins_before_2 := gc.save_manager.coins
+	var r_ac2 := gc.place_from_tray(0, Vector2i(0, 6))
+	_assert_eq(r_ac2["all_clear"], true, "Second board wipe triggers ALL CLEAR #2")
+	_assert_eq(r_ac2["all_clear_count"], 2, "Second All Clear increments all_clear_count=2")
+	_assert_eq(r_ac2["all_clear_bonus"], 50000, "All Clear #2 bonus = 5000 * x2 * combo4(2.5) * fever(2.0) = 50000")
+	_assert_eq(r_ac2["all_clear_coins"], ScoreEngine.ALL_CLEAR_BONUS_COINS * 2, "All Clear #2 awards +3,000 bonus coins")
+	_assert_eq(gc.save_manager.coins, coins_before_2 + ScoreEngine.ALL_CLEAR_BONUS_COINS * 2, "All Clear #2 coins credited")
+	_assert_eq(r_ac2["awarded_special"], PieceCatalog.SPECIAL_LIGHTNING, "2nd+ All Clear upgrades special reward to LIGHTNING")
 
 
 # ------------------------------------------------------------------------------

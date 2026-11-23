@@ -177,8 +177,8 @@ func _process(delta: float) -> void:
 	# Smooth rolling score count-up synchronized with orb barrage & rapid arcade tally ticks.
 	if _pending_orb_points > 0.0:
 		_orb_catchup_timer += dt
-		if _orb_catchup_timer > 0.48:
-			var release := minf(_pending_orb_points, maxf(120.0, _pending_orb_points * 10.0) * dt)
+		if _orb_catchup_timer > 1.35:
+			var release := minf(_pending_orb_points, maxf(180.0, _pending_orb_points * 10.0) * dt)
 			_pending_orb_points = maxf(0.0, _pending_orb_points - release)
 
 	var effective_target := maxf(_displayed_score, float(_target_score) - _pending_orb_points)
@@ -424,18 +424,20 @@ func apply_move_result(result: Dictionary) -> void:
 	var lines_cleared := int(result.get("lines_cleared", 0))
 	var blast_cells := result.get("blast_cells", []) as Array
 	var did_clear := lines_cleared > 0 or not blast_cells.is_empty()
+	var is_all_clear := bool(result.get("all_clear", false))
 
 	# Visceral Balatro Scale-Punch, Live +POINTS Surge Counter, and Orb-Synchronized Hold on Hero Score!
 	if points_earned > 0:
 		if did_clear:
-			# Hold 78% of clear points for the incoming orb barrage so each orb impact visibly jacks up the score!
-			_pending_orb_points += float(points_earned) * 0.78
+			# Hold 88% on ALL CLEAR jackpot (or 78% on normal clear) so the rapid orb fountain visibly cascades the score!
+			var hold_ratio := 0.88 if is_all_clear else 0.78
+			_pending_orb_points += float(points_earned) * hold_ratio
 			_orb_catchup_timer = 0.0
-			_eq_slam_offset = 15.0
+			_eq_slam_offset = 18.0 if is_all_clear else 15.0
 
 		_gain_burst_value += points_earned
-		_gain_burst_timer = 1.05 if did_clear else 0.55
-		_gain_burst_scale = 1.42 if did_clear else 1.20
+		_gain_burst_timer = 1.65 if is_all_clear else (1.05 if did_clear else 0.55)
+		_gain_burst_scale = 1.54 if is_all_clear else (1.42 if did_clear else 1.20)
 
 		var t_mag := clampf((float(points_earned) - 60.0) / 8000.0, 0.0, 1.0)
 		var punch := lerpf(1.16 if not did_clear else 1.28, 1.56, pow(t_mag, 0.50))

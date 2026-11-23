@@ -318,6 +318,7 @@ func export_run_state() -> Dictionary:
 			"fever_active": score_engine.fever_active,
 			"fever_turns_left": score_engine.fever_turns_left,
 			"stage_mult": score_engine.stage_mult,
+			"all_clear_count": score_engine.all_clear_count,
 		},
 	}
 
@@ -430,6 +431,7 @@ func restore_run_state(data: Dictionary) -> bool:
 	score_engine.fever_active = bool(sdict.get("fever_active", false))
 	score_engine.fever_turns_left = maxi(0, int(sdict.get("fever_turns_left", 0)))
 	score_engine.stage_mult = maxf(1.0, float(sdict.get("stage_mult", 1.0)))
+	score_engine.all_clear_count = maxi(0, int(sdict.get("all_clear_count", 0)))
 	_last_saved_high_score = score_engine.high_score
 
 	is_game_over = not can_continue()
@@ -855,11 +857,15 @@ func _resolve_placement(
 	var did_real_clear := lines_cleared > 0 or not blast_cells.is_empty()
 
 	# PERFECT CLEAR (ALL CLEAR): clearing every remaining block off the 8x8 board!
+	# Each subsequent ALL CLEAR in the same run multiplies both the score & coin jackpot (x1, x2, x3, x4...)!
 	var all_clear := did_real_clear and board.get_occupied_count() == 0
+	var all_clear_count := score_engine.all_clear_count
 	var all_clear_bonus := 0
 	var all_clear_coins := 0
 	if all_clear:
-		var ac_mult := maxf(1.0, float(score_res["total_mult"]))
+		score_engine.all_clear_count += 1
+		all_clear_count = score_engine.all_clear_count
+		var ac_mult := maxf(1.0, float(score_res["total_mult"])) * float(all_clear_count)
 		all_clear_bonus = int(round(float(ScoreEngine.ALL_CLEAR_BONUS_BASE) * ac_mult))
 		var ac_add := score_engine.add_bonus_points(all_clear_bonus)
 		score_res["points_earned"] = int(score_res["points_earned"]) + all_clear_bonus
@@ -868,7 +874,7 @@ func _resolve_placement(
 		score_res["is_new_high_score"] = bool(ac_add["is_new_high_score"])
 		if bool(ac_add["just_beat_high_score"]):
 			score_res["just_beat_high_score"] = true
-		all_clear_coins = ScoreEngine.ALL_CLEAR_BONUS_COINS
+		all_clear_coins = ScoreEngine.ALL_CLEAR_BONUS_COINS * all_clear_count
 		if save_manager != null:
 			save_manager.add_coins(all_clear_coins)
 
@@ -878,14 +884,12 @@ func _resolve_placement(
 	elif turn_count % 4 == 0 and board.get_active_multiplier_cells().size() < BoardState.MAX_ACTIVE_MULTIPLIERS:
 		spawned_multipliers = board.replenish_multipliers(active_mult_rng, 1, avoid_mult_cells)
 
-	# Award Bomb (2 lines or All Clear) or Lightning (3+ lines) immediately into emptied tray slot or queue.
+	# Award Bomb (2 lines or 1st All Clear) or Lightning (3+ lines or 2nd+ All Clear chain)!
 	var awarded_special := PieceCatalog.SPECIAL_NORMAL
 	var awarded_slot := -1
-	if lines_cleared == 2:
-		awarded_special = PieceCatalog.SPECIAL_BOMB
-	elif lines_cleared >= 3:
+	if lines_cleared >= 3 or (all_clear and all_clear_count >= 2):
 		awarded_special = PieceCatalog.SPECIAL_LIGHTNING
-	elif all_clear:
+	elif lines_cleared == 2 or all_clear:
 		awarded_special = PieceCatalog.SPECIAL_BOMB
 
 	if awarded_special != PieceCatalog.SPECIAL_NORMAL:
@@ -964,6 +968,7 @@ func _resolve_placement(
 		"blast_origin": origin,
 		"lines_cleared": lines_cleared,
 		"all_clear": all_clear,
+		"all_clear_count": all_clear_count,
 		"all_clear_bonus": all_clear_bonus,
 		"all_clear_coins": all_clear_coins,
 		"base_chips": int(score_res["base_chips"]),

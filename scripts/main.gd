@@ -1432,19 +1432,35 @@ func _on_move_resolved(result: Dictionary) -> void:
 		)
 
 		var score_target_pf := Vector2(270.0, 48.0)
+		var is_ac_move := bool(result.get("all_clear", false))
+		var ac_chain_num := maxi(1, int(result.get("all_clear_count", 1)))
+		if is_ac_move:
+			orb_origins.append(board_inner_local.position + Vector2(36.0, 36.0))
+			orb_origins.append(Vector2(board_inner_local.end.x - 36.0, board_inner_local.position.y + 36.0))
+			orb_origins.append(Vector2(board_inner_local.position.x + 36.0, board_inner_local.end.y - 36.0))
+			orb_origins.append(board_inner_local.end - Vector2(36.0, 36.0))
+			orb_origins.append(board_center_local)
 		_orb_tick_index = 0
-		vfx_layer.spawn_score_orbs(orb_origins, score_target_pf, points_earned, accent)
+		vfx_layer.spawn_score_orbs(
+			orb_origins,
+			score_target_pf,
+			points_earned,
+			Color("#FFE44D") if is_ac_move else accent,
+			is_ac_move,
+			ac_chain_num
+		)
 
 		# Dramatic multi-line / combo / FEVER banner callout!
 		if lines_cleared >= 2 or combo_streak >= 2 or fever_just_ignited:
 			vfx_layer.spawn_combo_banner(board_center_local, combo_streak, lines_cleared, fever_just_ignited)
 
-	# 4B. PERFECT CLEAR (ALL CLEAR) — Wiped the entire 8x8 board!
+	# 4B. PERFECT CLEAR (ALL CLEAR) — Wiped the entire 8x8 board (escalating x1, x2, x3... chain jackpot)!
 	if bool(result.get("all_clear", false)):
+		var ac_count := maxi(1, int(result.get("all_clear_count", 1)))
 		var ac_bonus := int(result.get("all_clear_bonus", 0))
 		var ac_coins := int(result.get("all_clear_coins", 0))
 		board_view.trigger_clear_flash(1.0, Color("#FFE44D"))
-		vfx_layer.add_trauma(0.55)
+		vfx_layer.add_trauma(minf(0.85, 0.50 + float(ac_count) * 0.10))
 		var corner_origins: Array[Vector2] = [
 			board_inner_local.position + Vector2(32.0, 32.0),
 			Vector2(board_inner_local.end.x - 32.0, board_inner_local.position.y + 32.0),
@@ -1452,15 +1468,18 @@ func _on_move_resolved(result: Dictionary) -> void:
 			board_inner_local.end - Vector2(32.0, 32.0),
 			board_center_local,
 		]
-		for corner_pos in corner_origins:
-			vfx_layer.spawn_cell_shatter(corner_pos, 1, cell_size * 1.15, 6)
+		for k in range(corner_origins.size()):
+			var shatter_col := 1 if (k % 2 == 0) else (6 if ac_count >= 2 else 5)
+			vfx_layer.spawn_cell_shatter(corner_origins[k], shatter_col, cell_size * 1.15, 7)
+		var ac_title := "ALL CLEAR!" if ac_count <= 1 else ("ALL CLEAR ×%d!" % ac_count)
+		var ac_bg := Color("#B84A00") if ac_count <= 1 else (Color("#B81478") if ac_count == 2 else Color("#7A12C4"))
 		vfx_layer.spawn_floating_text(
 			Vector2(270.0, 336.0),
-			"ALL CLEAR!",
+			ac_title,
 			Color("#FFF8A8"),
-			42,
+			42 if ac_count <= 1 else 45,
 			-2.2,
-			Color("#B84A00")
+			ac_bg
 		)
 		vfx_layer.spawn_floating_text(
 			Vector2(270.0, 396.0),
@@ -1524,7 +1543,7 @@ func _on_move_resolved(result: Dictionary) -> void:
 func _on_score_orb_arrived(points_chunk: int) -> void:
 	hud_view.trigger_score_orb_impact(points_chunk)
 	_orb_tick_index += 1
-	sound_synth.play_score_tick(1.05 + minf(0.85, float(_orb_tick_index) * 0.06))
+	sound_synth.play_score_tick(1.02 + minf(1.25, float(_orb_tick_index) * 0.045))
 	if vfx_layer != null:
 		vfx_layer.add_trauma(0.045)
 	if _orb_tick_index % 3 == 1:

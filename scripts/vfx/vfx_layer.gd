@@ -797,7 +797,9 @@ func spawn_score_orbs(
 	from_positions: Array[Vector2],
 	target_pos: Vector2,
 	total_points: int,
-	color: Color
+	color: Color,
+	is_jackpot: bool = false,
+	jackpot_tier: int = 1
 ) -> void:
 	if from_positions.is_empty():
 		if total_points > 0:
@@ -805,25 +807,32 @@ func spawn_score_orbs(
 		return
 
 	var orb_count: int = clampi(maxi(from_positions.size(), 6 + int(total_points / 550)), 7, 18)
+	if is_jackpot:
+		orb_count = clampi(22 + jackpot_tier * 4, 24, 38)
 	var safe_points: int = maxi(0, total_points)
 	var base_chunk: int = safe_points / orb_count
 	var remainder: int = safe_points % orb_count
+	var stagger_step: float = 0.028 if is_jackpot else 0.022
 
 	for i: int in range(orb_count):
 		var src_idx: int = int(floor(float(i) * float(from_positions.size()) / float(orb_count)))
 		var p0: Vector2 = from_positions[clampi(src_idx, 0, from_positions.size() - 1)]
-		p0 += Vector2(_rng.randf_range(-10.0, 10.0), _rng.randf_range(-10.0, 10.0))
+		p0 += Vector2(_rng.randf_range(-12.0, 12.0), _rng.randf_range(-12.0, 12.0))
 
 		var to_target: Vector2 = target_pos - p0
 		var dist: float = maxf(40.0, to_target.length())
 		var dir_norm: Vector2 = to_target / dist
 		var perp: Vector2 = Vector2(-dir_norm.y, dir_norm.x)
 		var fan_side: float = -1.0 if (i & 1) == 0 else 1.0
-		var arc_bow: float = clampf(dist * _rng.randf_range(0.22, 0.42), 52.0, 150.0) * fan_side
-		var p1: Vector2 = p0.lerp(target_pos, _rng.randf_range(0.36, 0.56)) + perp * arc_bow + Vector2(0.0, -28.0)
+		var arc_bow: float = clampf(dist * _rng.randf_range(0.24, 0.46), 54.0, 165.0) * fan_side
+		var p1: Vector2 = p0.lerp(target_pos, _rng.randf_range(0.34, 0.58)) + perp * arc_bow + Vector2(0.0, -30.0)
 
-		var blend_target: Color = SCORE_GOLD_COLOR if (i & 1) == 0 else SCORE_CYAN_COLOR
-		var orb_col: Color = color.lerp(blend_target, 0.72)
+		var blend_target: Color
+		if is_jackpot:
+			blend_target = SCORE_GOLD_COLOR if (i % 3 != 2) else (Color("#FF66DD") if (i % 6 == 2) else SCORE_CYAN_COLOR)
+		else:
+			blend_target = SCORE_GOLD_COLOR if (i & 1) == 0 else SCORE_CYAN_COLOR
+		var orb_col: Color = color.lerp(blend_target, 0.78 if is_jackpot else 0.72)
 		orb_col.a = 1.0
 
 		var pts_chunk: int = base_chunk + (1 if i < remainder else 0)
@@ -834,9 +843,9 @@ func spawn_score_orbs(
 			"pos": p0,
 			"col": orb_col,
 			"points": pts_chunk,
-			"delay": float(i) * 0.022,
+			"delay": float(i) * stagger_step,
 			"age": 0.0,
-			"dur": _rng.randf_range(0.28, 0.42),
+			"dur": _rng.randf_range(0.30, 0.46) if is_jackpot else _rng.randf_range(0.28, 0.42),
 			"trail": PackedVector2Array([p0]),
 			"is_final": i == (orb_count - 1),
 		})

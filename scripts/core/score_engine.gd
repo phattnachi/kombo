@@ -38,6 +38,7 @@ var fever_charge: float = 0.0
 var fever_active: bool = false
 var fever_turns_left: int = 0
 var stage_mult: float = 1.0
+var all_clear_count: int = 0
 
 
 func reset(p_high_score: int = 0, p_best_combo: int = 0) -> void:
@@ -52,6 +53,7 @@ func reset(p_high_score: int = 0, p_best_combo: int = 0) -> void:
 	fever_active = false
 	fever_turns_left = 0
 	stage_mult = 1.0
+	all_clear_count = 0
 
 
 func add_bonus_points(bonus: int) -> Dictionary:
