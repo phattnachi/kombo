@@ -11,6 +11,7 @@ var best_combo: int = 0
 var sfx_enabled: bool = true
 var bgm_enabled: bool = true
 var vibration_enabled: bool = true
+var notifications_enabled: bool = true
 var daily_date: String = ""
 var daily_attempts_used: int = 0
 var daily_best_score: int = 0
@@ -23,6 +24,8 @@ var gem_hunt_high_score: int = 0
 var gem_hunt_best_stage: int = 1
 var gem_hunt_best_combo: int = 0
 var coins: int = 0
+var unlocked_skins: Array[String] = ["jewel"]
+var equipped_skin: String = "jewel"
 var save_count: int = 0
 
 
@@ -37,6 +40,7 @@ func load_data() -> Dictionary:
 	sfx_enabled = true
 	bgm_enabled = true
 	vibration_enabled = true
+	notifications_enabled = true
 	daily_date = ""
 	daily_attempts_used = 0
 	daily_best_score = 0
@@ -49,6 +53,8 @@ func load_data() -> Dictionary:
 	gem_hunt_best_stage = 1
 	gem_hunt_best_combo = 0
 	coins = 0
+	unlocked_skins = ["jewel"]
+	equipped_skin = "jewel"
 
 	if not FileAccess.file_exists(save_path):
 		return _to_dict()
@@ -75,6 +81,7 @@ func load_data() -> Dictionary:
 	sfx_enabled = _parse_bool(data.get("sfx_enabled", true), true)
 	bgm_enabled = _parse_bool(data.get("bgm_enabled", true), true)
 	vibration_enabled = _parse_bool(data.get("vibration_enabled", true), true)
+	notifications_enabled = _parse_bool(data.get("notifications_enabled", true), true)
 	daily_date = _parse_string(data.get("daily_date", ""))
 	daily_attempts_used = clampi(_parse_non_negative_int(data.get("daily_attempts_used", 0)), 0, DailyChallenge.MAX_DAILY_ATTEMPTS)
 	daily_best_score = _parse_non_negative_int(data.get("daily_best_score", 0))
@@ -87,6 +94,15 @@ func load_data() -> Dictionary:
 	gem_hunt_best_stage = maxi(1, _parse_non_negative_int(data.get("gem_hunt_best_stage", 1)))
 	gem_hunt_best_combo = _parse_non_negative_int(data.get("gem_hunt_best_combo", 0))
 	coins = _parse_non_negative_int(data.get("coins", 0))
+	unlocked_skins = ["jewel"]
+	var raw_skins: Variant = data.get("unlocked_skins", ["jewel"])
+	if typeof(raw_skins) == TYPE_ARRAY:
+		for item in (raw_skins as Array):
+			var sid := _parse_string(item)
+			if not sid.is_empty() and not unlocked_skins.has(sid):
+				unlocked_skins.append(sid)
+	var eq := _parse_string(data.get("equipped_skin", "jewel"))
+	equipped_skin = eq if unlocked_skins.has(eq) else "jewel"
 	return _to_dict()
 
 
@@ -114,11 +130,18 @@ func update_records(candidate_score: int, candidate_combo: int) -> bool:
 	return changed
 
 
-func update_settings(p_sfx: bool, p_bgm: bool, p_vibration: bool) -> bool:
-	var changed := (sfx_enabled != p_sfx) or (bgm_enabled != p_bgm) or (vibration_enabled != p_vibration)
+func update_settings(p_sfx: bool, p_bgm: bool, p_vibration: bool, p_notifications: Variant = null) -> bool:
+	var next_notif := notifications_enabled if p_notifications == null else bool(p_notifications)
+	var changed := (
+		(sfx_enabled != p_sfx)
+		or (bgm_enabled != p_bgm)
+		or (vibration_enabled != p_vibration)
+		or (notifications_enabled != next_notif)
+	)
 	sfx_enabled = p_sfx
 	bgm_enabled = p_bgm
 	vibration_enabled = p_vibration
+	notifications_enabled = next_notif
 	if changed:
 		save_data()
 	return changed
@@ -220,6 +243,34 @@ func add_coins(amount: int) -> int:
 	return coins
 
 
+func is_skin_unlocked(skin_id: String) -> bool:
+	return skin_id == "jewel" or unlocked_skins.has(skin_id)
+
+
+func unlock_skin(skin_id: String, cost: int) -> bool:
+	if skin_id.is_empty():
+		return false
+	if is_skin_unlocked(skin_id):
+		return true
+	var price := maxi(0, cost)
+	if coins < price:
+		return false
+	coins -= price
+	unlocked_skins.append(skin_id)
+	equipped_skin = skin_id
+	save_data()
+	return true
+
+
+func equip_skin(skin_id: String) -> bool:
+	if not is_skin_unlocked(skin_id):
+		return false
+	if equipped_skin != skin_id:
+		equipped_skin = skin_id
+		save_data()
+	return true
+
+
 func reset_save() -> void:
 	high_score = 0
 	best_combo = 0
@@ -232,6 +283,7 @@ func delete_save_file() -> void:
 	sfx_enabled = true
 	bgm_enabled = true
 	vibration_enabled = true
+	notifications_enabled = true
 	daily_date = ""
 	daily_attempts_used = 0
 	daily_best_score = 0
@@ -244,6 +296,8 @@ func delete_save_file() -> void:
 	gem_hunt_best_stage = 1
 	gem_hunt_best_combo = 0
 	coins = 0
+	unlocked_skins = ["jewel"]
+	equipped_skin = "jewel"
 	save_count = 0
 	if FileAccess.file_exists(save_path):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
@@ -276,6 +330,7 @@ func _to_dict() -> Dictionary:
 		"sfx_enabled": sfx_enabled,
 		"bgm_enabled": bgm_enabled,
 		"vibration_enabled": vibration_enabled,
+		"notifications_enabled": notifications_enabled,
 		"daily_date": daily_date,
 		"daily_attempts_used": daily_attempts_used,
 		"daily_best_score": daily_best_score,
@@ -288,4 +343,6 @@ func _to_dict() -> Dictionary:
 		"gem_hunt_best_stage": gem_hunt_best_stage,
 		"gem_hunt_best_combo": gem_hunt_best_combo,
 		"coins": coins,
+		"unlocked_skins": unlocked_skins,
+		"equipped_skin": equipped_skin,
 	}

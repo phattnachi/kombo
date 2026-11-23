@@ -40,6 +40,10 @@ var _combo_heat: float = 0.0
 var _fever_heat: float = 0.0
 var _clear_flash: float = 0.0
 var _clear_flash_color: Color = Color("#6CEEFF")
+var _milestone_bezel_col: Color = COL_BEZEL_BODY
+var _milestone_rim_col: Color = COL_RIM_CALM
+var _target_bezel_col: Color = COL_BEZEL_BODY
+var _target_rim_col: Color = COL_RIM_CALM
 
 # Landing spring animations: Dictionary[Vector2i(col, row), float elapsed_sec]
 var _landing_anims: Dictionary = {}
@@ -113,6 +117,11 @@ func _process(delta: float) -> void:
 	else:
 		_fever_heat = target_fever_heat
 
+	if not _milestone_bezel_col.is_equal_approx(_target_bezel_col) or not _milestone_rim_col.is_equal_approx(_target_rim_col):
+		_milestone_bezel_col = _milestone_bezel_col.lerp(_target_bezel_col, blend_step)
+		_milestone_rim_col = _milestone_rim_col.lerp(_target_rim_col, blend_step)
+		dirty = true
+
 	if _clear_flash > 0.0:
 		_clear_flash = maxf(0.0, _clear_flash - delta * 4.2)
 		dirty = true
@@ -152,6 +161,16 @@ func refresh() -> void:
 func set_heat_level(combo: int, fever: bool) -> void:
 	_target_combo = maxi(0, combo)
 	_target_fever = fever
+	queue_redraw()
+
+
+## Smoothly shifts the board bezel and calm rim color as the player climbs Score Milestones.
+func set_milestone_theme(bezel_col: Color, rim_col: Color, immediate: bool = false) -> void:
+	_target_bezel_col = bezel_col
+	_target_rim_col = rim_col
+	if immediate:
+		_milestone_bezel_col = bezel_col
+		_milestone_rim_col = rim_col
 	queue_redraw()
 
 
@@ -402,7 +421,7 @@ func _draw_board_frame(outer_rect: Rect2, inner_rect: Rect2) -> void:
 	var combo_pulse: float = 0.5 + 0.5 * sin(_time * 4.2)
 
 	var fever_rim: Color = COL_RIM_FEVER_A.lerp(COL_RIM_FEVER_B, 0.35 + 0.45 * fever_pulse)
-	var active_rim: Color = COL_RIM_CALM.lerp(COL_RIM_COMBO, _combo_heat * (0.85 + 0.15 * combo_pulse))
+	var active_rim: Color = _milestone_rim_col.lerp(COL_RIM_COMBO, _combo_heat * (0.85 + 0.15 * combo_pulse))
 	active_rim = active_rim.lerp(fever_rim, _fever_heat)
 
 	# 1. Layered deep midnight drop shadow anchoring the board above the swirling background.
@@ -420,7 +439,7 @@ func _draw_board_frame(outer_rect: Rect2, inner_rect: Rect2) -> void:
 		_sb_aura_inner.draw(ci, outer_rect.grow(2.2))
 
 	# 3. Outer midnight beveled bezel body + outer rim.
-	var bezel_body: Color = COL_BEZEL_BODY.lerp(Color("#1A2352"), _combo_heat * 0.35)
+	var bezel_body: Color = _milestone_bezel_col.lerp(Color("#1A2352"), _combo_heat * 0.35)
 	bezel_body = bezel_body.lerp(Color("#2D1224"), _fever_heat * 0.65)
 	var outer_edge: Color = COL_BEZEL_BOT_BEVEL.lerp(active_rim, 0.24 + 0.38 * heat_power)
 	_sb_bezel.bg_color = bezel_body

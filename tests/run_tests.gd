@@ -1041,6 +1041,43 @@ func _test_high_score_and_persistence() -> void:
 	_assert_eq(sm_huge.high_score, 9000000000000000, "Huge JSON float 1e30 clamps safely to 9e15")
 	_assert_eq(sm_huge.best_combo, 9000000000000000, "Huge JSON float best_combo clamps safely to 9e15")
 
+	# D. Unlockable Block Skins & Coin Wallet Persistence
+	var sm_skins := SaveManager.new(TEST_SAVE_PATH)
+	sm_skins.delete_save_file()
+	_assert_true(sm_skins.is_skin_unlocked("jewel"), "Default 'jewel' skin unlocked from start")
+	_assert_eq(sm_skins.equipped_skin, "jewel", "Default equipped skin is 'jewel'")
+	_assert_true(not sm_skins.is_skin_unlocked("wood"), "'wood' skin locked initially")
+	_assert_true(not sm_skins.unlock_skin("wood", 150), "Cannot unlock 'wood' with 0 coins")
+	sm_skins.add_coins(400)
+	_assert_eq(sm_skins.coins, 400, "Added 400 coins to wallet")
+	_assert_true(sm_skins.unlock_skin("wood", 150), "Unlocked 'wood' for 150 coins")
+	_assert_eq(sm_skins.coins, 250, "250 coins remaining after unlocking 'wood'")
+	_assert_true(sm_skins.is_skin_unlocked("wood"), "'wood' is now unlocked")
+	_assert_true(sm_skins.equip_skin("wood"), "Equipped 'wood' skin")
+	_assert_eq(sm_skins.equipped_skin, "wood", "equipped_skin updated to 'wood'")
+
+	var sm_skins_reload := SaveManager.new(TEST_SAVE_PATH)
+	_assert_eq(sm_skins_reload.coins, 250, "Reloaded coin balance persisted (250)")
+	_assert_true(sm_skins_reload.is_skin_unlocked("wood"), "Reloaded 'wood' unlock state persisted")
+	_assert_eq(sm_skins_reload.equipped_skin, "wood", "Reloaded equipped_skin persisted ('wood')")
+	_assert_eq(TilePainter.get_skin_catalog().size(), 5, "TilePainter exposes 5 block skins")
+	TilePainter.set_active_skin("neon")
+	_assert_eq(TilePainter.get_active_skin(), "neon", "TilePainter active skin switched to 'neon'")
+	TilePainter.set_active_skin("jewel")
+
+	# E. Notifications Setting Persistence & Localized Reminder Templates
+	_assert_eq(sm_skins_reload.notifications_enabled, true, "Notifications default to enabled")
+	sm_skins_reload.update_settings(true, true, true, false)
+	var sm_notif_reload := SaveManager.new(TEST_SAVE_PATH)
+	_assert_eq(sm_notif_reload.notifications_enabled, false, "Notifications toggle persists across reload")
+	var nm := NotificationManager.new()
+	var th_msgs := nm.get_localized_reminders("th_TH")
+	var en_msgs := nm.get_localized_reminders("en_US")
+	_assert_eq(th_msgs.size(), 3, "Thai localized reminders has 3 scheduled entries")
+	_assert_eq(en_msgs.size(), 3, "English localized reminders has 3 scheduled entries")
+	_assert_true(String(th_msgs[0]["title"]).contains("เล่นเร็วๆ"), "Thai quick-break notification title present")
+	nm.free()
+
 
 # ------------------------------------------------------------------------------
 # 14. Full Multi-Game Simulation & MoveResult Schema / Invariants

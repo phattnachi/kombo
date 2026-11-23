@@ -9,6 +9,7 @@ extends Control
 signal sfx_toggled(enabled: bool)
 signal bgm_toggled(enabled: bool)
 signal vibration_toggled(enabled: bool)
+signal notifications_toggled(enabled: bool)
 signal how_to_play_pressed()
 signal replay_pressed()
 signal home_pressed()
@@ -16,10 +17,10 @@ signal closed()
 
 const OVERLAY_SIZE := Vector2(540.0, 960.0)
 const CARD_WIDTH := 400.0
-const CARD_HEIGHT_GAMEPLAY := 536.0
-const CARD_HEIGHT_TITLE := 414.0
+const CARD_HEIGHT_GAMEPLAY := 566.0
+const CARD_HEIGHT_TITLE := 452.0
 const HEADER_HEIGHT := 68.0
-const ROW_STEP := 61.0
+const ROW_STEP := 56.0
 
 const FONT_EXTRABOLD_PATH := "res://assets/fonts/Kanit-ExtraBold.ttf"
 const FONT_BOLD_PATH := "res://assets/fonts/Kanit-Bold.ttf"
@@ -45,6 +46,7 @@ var _show_gameplay_actions: bool = true
 var _sfx_enabled: bool = true
 var _bgm_enabled: bool = true
 var _vibration_enabled: bool = true
+var _notifications_enabled: bool = true
 
 var _time_sec: float = 0.0
 var _backdrop_alpha: float = 0.0
@@ -58,6 +60,7 @@ var _close_btn: _CloseIconButton
 var _sfx_toggle: _ToggleSwitch
 var _bgm_toggle: _ToggleSwitch
 var _vib_toggle: _ToggleSwitch
+var _notif_toggle: _ToggleSwitch
 var _guide_btn: _ActionPillButton
 var _replay_btn: _ActionPillButton
 var _home_btn: _ActionPillButton
@@ -142,11 +145,13 @@ func open_settings(
 	vib_on: bool,
 	show_gameplay_actions: bool = true,
 	replay_label: String = "Replay",
-	replay_enabled: bool = true
+	replay_enabled: bool = true,
+	notif_on: bool = true
 ) -> void:
 	_sfx_enabled = sfx_on
 	_bgm_enabled = bgm_on
 	_vibration_enabled = vib_on
+	_notifications_enabled = notif_on
 	_show_gameplay_actions = show_gameplay_actions
 
 	_is_open = true
@@ -162,6 +167,8 @@ func open_settings(
 		_bgm_toggle.set_state(_bgm_enabled, true)
 	if _vib_toggle != null:
 		_vib_toggle.set_state(_vibration_enabled, true)
+	if _notif_toggle != null:
+		_notif_toggle.set_state(_notifications_enabled, true)
 	if _replay_btn != null:
 		_replay_btn.label_text = replay_label
 		_replay_btn.set_enabled(replay_enabled)
@@ -186,16 +193,20 @@ func close_settings(emit_closed: bool = true) -> void:
 		closed.emit()
 
 
-func sync_states(sfx_on: bool, bgm_on: bool, vib_on: bool) -> void:
+func sync_states(sfx_on: bool, bgm_on: bool, vib_on: bool, notif_on: Variant = null) -> void:
 	_sfx_enabled = sfx_on
 	_bgm_enabled = bgm_on
 	_vibration_enabled = vib_on
+	if notif_on != null:
+		_notifications_enabled = bool(notif_on)
 	if _sfx_toggle != null:
 		_sfx_toggle.set_state(_sfx_enabled, false)
 	if _bgm_toggle != null:
 		_bgm_toggle.set_state(_bgm_enabled, false)
 	if _vib_toggle != null:
 		_vib_toggle.set_state(_vibration_enabled, false)
+	if _notif_toggle != null:
+		_notif_toggle.set_state(_notifications_enabled, false)
 
 
 func is_open() -> bool:
@@ -306,6 +317,12 @@ func _build_card() -> void:
 	_vib_toggle.toggled_clean.connect(_on_vib_switch_changed)
 	_card.add_child(_vib_toggle)
 
+	_notif_toggle = _ToggleSwitch.new()
+	_notif_toggle.name = "NotificationsToggle"
+	_notif_toggle.size = Vector2(76.0, 38.0)
+	_notif_toggle.toggled_clean.connect(_on_notif_switch_changed)
+	_card.add_child(_notif_toggle)
+
 	_guide_btn = _ActionPillButton.new()
 	_guide_btn.name = "GuideActionButton"
 	_guide_btn.label_text = "Guide"
@@ -349,13 +366,14 @@ func _layout_card_contents() -> void:
 	_sfx_toggle.position = Vector2(switch_x, _row_center_y(0) - 19.0)
 	_bgm_toggle.position = Vector2(switch_x, _row_center_y(1) - 19.0)
 	_vib_toggle.position = Vector2(switch_x, _row_center_y(2) - 19.0)
+	_notif_toggle.position = Vector2(switch_x, _row_center_y(3) - 19.0)
 
 	var btn_x := CARD_WIDTH - 28.0 - 118.0
-	_guide_btn.position = Vector2(btn_x, _row_center_y(3) - 21.0)
+	_guide_btn.position = Vector2(btn_x, _row_center_y(4) - 21.0)
 	_replay_btn.visible = _show_gameplay_actions
 	_home_btn.visible = _show_gameplay_actions
-	_replay_btn.position = Vector2(btn_x, _row_center_y(4) - 21.0)
-	_home_btn.position = Vector2(btn_x, _row_center_y(5) - 21.0)
+	_replay_btn.position = Vector2(btn_x, _row_center_y(5) - 21.0)
+	_home_btn.position = Vector2(btn_x, _row_center_y(6) - 21.0)
 
 
 func _apply_card_transform() -> void:
@@ -371,7 +389,7 @@ func _apply_card_transform() -> void:
 
 
 func _row_center_y(row_idx: int) -> float:
-	return HEADER_HEIGHT + 40.0 + float(row_idx) * ROW_STEP
+	return HEADER_HEIGHT + 38.0 + float(row_idx) * ROW_STEP
 
 
 func _on_sfx_switch_changed(enabled: bool) -> void:
@@ -387,6 +405,11 @@ func _on_bgm_switch_changed(enabled: bool) -> void:
 func _on_vib_switch_changed(enabled: bool) -> void:
 	_vibration_enabled = enabled
 	vibration_toggled.emit(enabled)
+
+
+func _on_notif_switch_changed(enabled: bool) -> void:
+	_notifications_enabled = enabled
+	notifications_toggled.emit(enabled)
 
 
 func _on_guide_clicked() -> void:
@@ -480,6 +503,7 @@ func _draw_card(ci: CanvasItem) -> void:
 		[0, "Sound"],
 		[1, "BGM"],
 		[2, "Vibration"],
+		[6, "Notifications"],
 		[5, "How to Play"],
 	]
 	if _show_gameplay_actions:
@@ -649,6 +673,23 @@ func _draw_row_icon(ci: CanvasItem, kind: int, c: Vector2) -> void:
 			ci.draw_circle(c, 11.5, Color("#18367A"))
 			ci.draw_arc(c, 11.5, 0.0, TAU, 24, Color("#56E6FF"), 2.2, true)
 			GameOverOverlay._draw_centered_outlined_text(ci, _font_extrabold, c + Vector2(0.0, 0.5), "?", 17, Color("#FFF4B8"), Color("#07122E"), 3, 0.8)
+		6: # Notifications (Golden Bell icon)
+			var bell_col := Color("#FFD84D") if _notifications_enabled else Color("#6C7FA8")
+			var clapper_col := Color("#FF9E2C") if _notifications_enabled else Color("#4F6088")
+			ci.draw_circle(c + Vector2(0.0, -9.2), 2.1, bell_col)
+			var dome := PackedVector2Array([
+				c + Vector2(-7.8, 4.2),
+				c + Vector2(-6.8, -3.5),
+				c + Vector2(-3.6, -7.8),
+				c + Vector2(3.6, -7.8),
+				c + Vector2(6.8, -3.5),
+				c + Vector2(7.8, 4.2),
+			])
+			ci.draw_colored_polygon(dome, bell_col)
+			ci.draw_line(c + Vector2(-9.8, 4.8), c + Vector2(9.8, 4.8), bell_col, 2.8, true)
+			ci.draw_circle(c + Vector2(0.0, 8.2), 2.6, clapper_col)
+			if not _notifications_enabled:
+				ci.draw_line(c + Vector2(-8.8, -8.8), c + Vector2(8.8, 8.8), Color("#FF5A6E"), 2.5, true)
 
 
 static func _draw_top_rounded_header(ci: CanvasItem, rect: Rect2, col_top: Color, col_bot: Color, radius: float) -> void:

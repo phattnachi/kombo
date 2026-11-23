@@ -143,12 +143,91 @@ const LIGHTNING_PALETTE: Dictionary = {
 static var _cached_extrabold: Font = null
 static var _cached_bold: Font = null
 
+static var _active_skin_id: String = "jewel"
 static var _textures_baked: bool = false
 static var _jewel_textures: Array[ImageTexture] = []
+static var _skin_texture_cache: Dictionary = {}
 static var _empty_cell_textures: Array[ImageTexture] = []
 static var _bomb_base_texture: ImageTexture = null
 static var _lightning_base_texture: ImageTexture = null
 static var _soft_glow_texture: ImageTexture = null
+
+const SKIN_CATALOG: Array[Dictionary] = [
+	{
+		"id": "jewel",
+		"name": "CLASSIC GEM",
+		"subtitle": "Faceted Crystal Bevel",
+		"cost": 0,
+		"accent": Color("#2979FF"),
+	},
+	{
+		"id": "wood",
+		"name": "WARM WOOD",
+		"subtitle": "Carved Timber Grain",
+		"cost": 150,
+		"accent": Color("#D9822B"),
+	},
+	{
+		"id": "jelly",
+		"name": "JUICY JELLY",
+		"subtitle": "Glossy Gummy Candy",
+		"cost": 350,
+		"accent": Color("#FF4DA6"),
+	},
+	{
+		"id": "neon",
+		"name": "CYBER NEON",
+		"subtitle": "Electric Laser Grid",
+		"cost": 700,
+		"accent": Color("#18F0FF"),
+	},
+	{
+		"id": "diamond",
+		"name": "ROYAL DIAMOND",
+		"subtitle": "8-Cut Prismatic Star",
+		"cost": 1200,
+		"accent": Color("#FFE04D"),
+	},
+]
+
+
+static func get_skin_catalog() -> Array[Dictionary]:
+	return SKIN_CATALOG
+
+
+static func get_active_skin() -> String:
+	return _active_skin_id
+
+
+static func set_active_skin(skin_id: String) -> void:
+	var valid_id := "jewel"
+	for entry in SKIN_CATALOG:
+		if String(entry["id"]) == skin_id:
+			valid_id = skin_id
+			break
+	if _active_skin_id == valid_id and _textures_baked:
+		return
+	_active_skin_id = valid_id
+	_ensure_textures()
+	if _skin_texture_cache.has(_active_skin_id):
+		_jewel_textures = _skin_texture_cache[_active_skin_id] as Array[ImageTexture]
+	else:
+		var baked: Array[ImageTexture] = []
+		for i: int in range(PALETTE.size()):
+			baked.append(_bake_skin_tile_texture(PALETTE[i] as Dictionary, _active_skin_id))
+		_skin_texture_cache[_active_skin_id] = baked
+		_jewel_textures = baked
+
+
+static func get_skin_preview_texture(skin_id: String, color_id: int) -> ImageTexture:
+	_ensure_textures()
+	if not _skin_texture_cache.has(skin_id):
+		var baked: Array[ImageTexture] = []
+		for i: int in range(PALETTE.size()):
+			baked.append(_bake_skin_tile_texture(PALETTE[i] as Dictionary, skin_id))
+		_skin_texture_cache[skin_id] = baked
+	var arr: Array[ImageTexture] = _skin_texture_cache[skin_id] as Array[ImageTexture]
+	return arr[posmod(color_id, arr.size())]
 
 
 ## Safely fetches a jewel palette entry by color_id (wraps cleanly via posmod).
@@ -601,9 +680,18 @@ static func _ensure_textures() -> void:
 		return
 	_textures_baked = true
 
-	_jewel_textures.clear()
+	var jewel_set: Array[ImageTexture] = []
 	for i: int in range(PALETTE.size()):
-		_jewel_textures.append(_bake_beveled_tile_texture(PALETTE[i] as Dictionary))
+		jewel_set.append(_bake_beveled_tile_texture(PALETTE[i] as Dictionary))
+	_skin_texture_cache["jewel"] = jewel_set
+
+	if _active_skin_id != "jewel" and not _skin_texture_cache.has(_active_skin_id):
+		var custom_set: Array[ImageTexture] = []
+		for i: int in range(PALETTE.size()):
+			custom_set.append(_bake_skin_tile_texture(PALETTE[i] as Dictionary, _active_skin_id))
+		_skin_texture_cache[_active_skin_id] = custom_set
+
+	_jewel_textures = _skin_texture_cache.get(_active_skin_id, jewel_set) as Array[ImageTexture]
 
 	_empty_cell_textures.clear()
 	_empty_cell_textures.append(_bake_empty_cell_texture(false))
@@ -612,6 +700,87 @@ static func _ensure_textures() -> void:
 	_bomb_base_texture = _bake_beveled_tile_texture(BOMB_PALETTE)
 	_lightning_base_texture = _bake_beveled_tile_texture(LIGHTNING_PALETTE)
 	_soft_glow_texture = _bake_soft_glow_texture()
+
+
+## Dispatches procedural 128x128 mipmapped texture baking for each unlockable skin:
+## "jewel", "wood", "jelly", "neon", and "diamond".
+static func _bake_skin_tile_texture(pal: Dictionary, skin_id: String) -> ImageTexture:
+	if skin_id == "jewel":
+		return _bake_beveled_tile_texture(pal)
+	var base_tex: ImageTexture = _bake_beveled_tile_texture(pal)
+	var img: Image = base_tex.get_image()
+	var s: int = TILE_TEX_SIZE
+	var sf: float = float(s)
+	var half: float = sf * 0.5
+	var c_base: Color = pal["base"] as Color
+	var c_top: Color = pal["top"] as Color
+	var c_rim: Color = pal["rim"] as Color
+	var c_bot: Color = pal["bottom"] as Color
+	var c_glow: Color = pal["glow"] as Color
+
+	for py: int in range(6, s - 6):
+		var cy: float = float(py) + 0.5
+		var ny: float = (cy - half) / (half - 6.0)
+		for px: int in range(6, s - 6):
+			var cx: float = float(px) + 0.5
+			var nx: float = (cx - half) / (half - 6.0)
+			var col: Color = img.get_pixel(px, py)
+
+			if skin_id == "wood":
+				# Warm carved timber grain with organic wood rings & horizontal fibers.
+				var wood_tint := c_base.lerp(Color("#C87D3B"), 0.42)
+				var grain_wave := sin(ny * 18.0 + sin(nx * 5.5 + ny * 3.2) * 1.8) * 0.5 + 0.5
+				var ring_wave := sin(sqrt((nx + 0.35) * (nx + 0.35) + (ny * 1.4) * (ny * 1.4)) * 22.0) * 0.5 + 0.5
+				var grain := lerpf(0.84, 1.12, grain_wave * 0.65 + ring_wave * 0.35)
+				var w_col := col.lerp(wood_tint, 0.38) * grain
+				w_col.a = col.a
+				img.set_pixel(px, py, w_col)
+			elif skin_id == "jelly":
+				# Plump glossy gummy candy with subsurface glow & curved upper-left liquid bubble.
+				var dist_edge := 1.0 - maxf(absf(nx), absf(ny))
+				var inner_glow := clampf(dist_edge * 1.6, 0.0, 1.0)
+				var j_col := col.lerp(c_glow.lerp(Color.WHITE, 0.25), inner_glow * 0.34)
+				var bx := nx + 0.34
+				var by := ny + 0.38
+				var b_dist := bx * bx * 1.2 + by * by * 2.2
+				if b_dist < 0.16:
+					var gloss := clampf(1.0 - b_dist / 0.16, 0.0, 1.0)
+					j_col = j_col.lerp(Color.WHITE, gloss * gloss * 0.78)
+				j_col.a = col.a
+				img.set_pixel(px, py, j_col)
+			elif skin_id == "neon":
+				# Dark obsidian cyber core with blazing double neon laser tubes & corner nodes.
+				var max_n := maxf(absf(nx), absf(ny))
+				var n_col := Color(0.045, 0.062, 0.165, col.a).lerp(c_bot, 0.25)
+				var outer_tube := absf(max_n - 0.84)
+				var inner_tube := absf(max_n - 0.48)
+				var tube_glow := clampf(1.0 - outer_tube / 0.11, 0.0, 1.0)
+				var core_glow := clampf(1.0 - inner_tube / 0.09, 0.0, 1.0)
+				var diag_cross := minf(absf(nx - ny), absf(nx + ny))
+				if max_n < 0.46 and diag_cross < 0.07:
+					core_glow = maxf(core_glow, clampf(1.0 - diag_cross / 0.07, 0.0, 1.0) * 0.75)
+				var neon_hot := c_glow.lerp(Color.WHITE, 0.55)
+				n_col = n_col.lerp(c_glow, clampf(tube_glow * 0.85 + core_glow * 0.65, 0.0, 1.0))
+				n_col = n_col.lerp(neon_hot, clampf(pow(tube_glow, 2.4) * 0.95 + pow(core_glow, 2.4) * 0.80, 0.0, 1.0))
+				n_col.a = col.a
+				img.set_pixel(px, py, n_col)
+			elif skin_id == "diamond":
+				# Royal 8-cut prismatic star diamond with crisscross crown facet ridges & golden rim.
+				var d_diag1 := absf(nx - ny)
+				var d_diag2 := absf(nx + ny)
+				var d_oct := absf(nx) + absf(ny)
+				var facet_ridge := minf(minf(d_diag1, d_diag2), absf(d_oct - 0.72))
+				var ridge_glow := clampf(1.0 - facet_ridge / 0.075, 0.0, 1.0)
+				var prism := 0.5 + 0.5 * sin((nx * 3.5 - ny * 2.8) * PI)
+				var d_col := col.lerp(c_top.lerp(Color.WHITE, 0.35), prism * 0.26)
+				if d_oct < 0.72:
+					d_col = d_col.lerp(c_rim.lerp(Color.WHITE, 0.45), 0.24)
+				d_col = d_col.lerp(Color("#FFF9D2"), ridge_glow * ridge_glow * 0.72)
+				d_col.a = col.a
+				img.set_pixel(px, py, d_col)
+
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
 
 
 ## Pixel-perfect 128x128 4-trapezoid beveled jewel tile with chamfered corners,

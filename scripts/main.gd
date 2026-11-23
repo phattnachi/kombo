@@ -11,6 +11,7 @@ const SWIRL_SHADER_PATH := "res://shaders/swirl_bg.gdshader"
 var controller: GameController
 var run_persistence: RunPersistence
 var ad_bridge: AdBridge
+var notification_manager: NotificationManager
 var sound_synth: SoundSynth
 var bgm_manager: BgmManager
 
@@ -25,9 +26,75 @@ var game_over_overlay: GameOverOverlay
 var revive_overlay: ReviveOverlay
 var title_overlay: TitleOverlay
 var gem_stage_select_overlay: GemStageSelectOverlay
+var skin_shop_overlay: SkinShopOverlay
 var settings_overlay: SettingsOverlay
 var how_to_play_overlay: HowToPlayOverlay
 var studio_splash: StudioSplashOverlay
+
+const MILESTONE_THEMES: Array[Dictionary] = [
+	{
+		"min_score": 0,
+		"name": "MIDNIGHT COBALT",
+		"bg_deep": Color("#090E27"),
+		"bg_mid": Color("#18255E"),
+		"bg_accent": Color("#2A4298"),
+		"bezel": Color("#172044"),
+		"rim": Color("#384C96"),
+	},
+	{
+		"min_score": 10000,
+		"name": "EMERALD LAGOON",
+		"bg_deep": Color("#051A1E"),
+		"bg_mid": Color("#0C3D42"),
+		"bg_accent": Color("#187D72"),
+		"bezel": Color("#0F2C33"),
+		"rim": Color("#26E0B0"),
+	},
+	{
+		"min_score": 30000,
+		"name": "AMETHYST NEBULA",
+		"bg_deep": Color("#140826"),
+		"bg_mid": Color("#2F1456"),
+		"bg_accent": Color("#662A9E"),
+		"bezel": Color("#241246"),
+		"rim": Color("#BA62FF"),
+	},
+	{
+		"min_score": 75000,
+		"name": "SOLAR SUNSET",
+		"bg_deep": Color("#1E0B09"),
+		"bg_mid": Color("#4A1B10"),
+		"bg_accent": Color("#943F14"),
+		"bezel": Color("#381712"),
+		"rim": Color("#FFA42E"),
+	},
+	{
+		"min_score": 175000,
+		"name": "CYBER NEON",
+		"bg_deep": Color("#070B24"),
+		"bg_mid": Color("#18104C"),
+		"bg_accent": Color("#107494"),
+		"bezel": Color("#141A48"),
+		"rim": Color("#24F2FF"),
+	},
+	{
+		"min_score": 500000,
+		"name": "CELESTIAL GOLD",
+		"bg_deep": Color("#1A1105"),
+		"bg_mid": Color("#402A0A"),
+		"bg_accent": Color("#825812"),
+		"bezel": Color("#30220D"),
+		"rim": Color("#FFE24D"),
+	},
+]
+
+var _current_milestone_tier: int = 0
+var _bg_col_deep: Color = Color("#090E27")
+var _bg_col_mid: Color = Color("#18255E")
+var _bg_col_accent: Color = Color("#2A4298")
+var _bg_target_deep: Color = Color("#090E27")
+var _bg_target_mid: Color = Color("#18255E")
+var _bg_target_accent: Color = Color("#2A4298")
 
 var _bg_heat: float = 0.0
 var _bg_heat_target: float = 0.0
@@ -37,6 +104,7 @@ var _bg_pulse: float = 0.0
 var _orb_tick_index: int = 0
 var _playfield_base_pos: Vector2 = Vector2.ZERO
 var _vibration_enabled: bool = true
+var _notifications_enabled: bool = true
 var _audio_gesture_unlocked: bool = false
 var is_game_paused: bool = false
 var is_processing_ad: bool = false
@@ -55,6 +123,8 @@ func _ready() -> void:
 	_build_scene_hierarchy()
 	_init_controller_and_signals()
 	_apply_saved_settings()
+	if notification_manager != null:
+		notification_manager.on_app_foreground()
 	_layout_responsive()
 	start_fresh_run( -1, false)
 	if title_overlay != null:
@@ -78,6 +148,11 @@ func _notification(what: int) -> void:
 		_persist_active_run_if_needed()
 		if controller != null:
 			controller.flush_save()
+		if notification_manager != null:
+			notification_manager.on_app_background()
+	elif what == NOTIFICATION_APPLICATION_RESUMED or what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		if notification_manager != null:
+			notification_manager.on_app_foreground()
 	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
 		_handle_back_navigation()
 
@@ -113,6 +188,9 @@ func _handle_back_navigation() -> void:
 	if gem_stage_select_overlay != null and gem_stage_select_overlay.is_open():
 		gem_stage_select_overlay.close_selector(true)
 		return
+	if skin_shop_overlay != null and skin_shop_overlay.is_open():
+		skin_shop_overlay.close_shop(true)
+		return
 	if revive_overlay != null and revive_overlay.is_open():
 		_on_revive_declined()
 		return
@@ -141,6 +219,8 @@ func _unhandled_input(event: InputEvent) -> void:
 					revive_overlay.hide_overlay()
 				if gem_stage_select_overlay != null and gem_stage_select_overlay.is_open():
 					gem_stage_select_overlay.close_selector(false)
+				if skin_shop_overlay != null and skin_shop_overlay.is_open():
+					skin_shop_overlay.close_shop(false)
 				if how_to_play_overlay != null and how_to_play_overlay.is_open():
 					how_to_play_overlay.close_guide(false)
 				if settings_overlay != null and settings_overlay.is_open():
@@ -164,6 +244,8 @@ func _unhandled_input(event: InputEvent) -> void:
 					settings_overlay.close_settings(true)
 				elif gem_stage_select_overlay != null and gem_stage_select_overlay.is_open():
 					gem_stage_select_overlay.close_selector(true)
+				elif skin_shop_overlay != null and skin_shop_overlay.is_open():
+					skin_shop_overlay.close_shop(true)
 				elif playfield_root != null and playfield_root.visible and (title_overlay == null or not title_overlay.visible) and (studio_splash == null or not studio_splash.visible) and (game_over_overlay == null or not game_over_overlay.visible):
 					_on_hud_settings_requested()
 
@@ -192,6 +274,14 @@ func _process(delta: float) -> void:
 			swirl_mat.set_shader_parameter("speed", _bg_speed)
 		if absf(_bg_pulse - prev_pulse) > 0.0005:
 			swirl_mat.set_shader_parameter("pulse", _bg_pulse)
+		if not _bg_col_deep.is_equal_approx(_bg_target_deep) or not _bg_col_mid.is_equal_approx(_bg_target_mid) or not _bg_col_accent.is_equal_approx(_bg_target_accent):
+			var c_step := clampf(dt * 3.2, 0.0, 1.0)
+			_bg_col_deep = _bg_col_deep.lerp(_bg_target_deep, c_step)
+			_bg_col_mid = _bg_col_mid.lerp(_bg_target_mid, c_step)
+			_bg_col_accent = _bg_col_accent.lerp(_bg_target_accent, c_step)
+			swirl_mat.set_shader_parameter("color_deep", _bg_col_deep)
+			swirl_mat.set_shader_parameter("color_mid", _bg_col_mid)
+			swirl_mat.set_shader_parameter("color_accent", _bg_col_accent)
 
 	# Apply trauma screen shake to playfield without persistent drift.
 	if playfield_root != null and vfx_layer != null:
@@ -219,6 +309,7 @@ func start_fresh_run(seed_value: int = -1, clear_saved_classic: bool = true) -> 
 		bgm_manager.set_mode(BgmManager.Mode.PLAYING)
 
 	controller.start_new_game(seed_value)
+	_apply_milestone_for_score(0, true)
 	hud_view.clear_mode_badge()
 	hud_view.set_initial_state(controller.score_engine.score, controller.score_engine.high_score)
 	board_view.set_board_state(controller.board)
@@ -252,6 +343,7 @@ func start_daily_run(date_key: String = "") -> bool:
 
 	var dkey := String(res.get("date_key", DailyChallenge.get_today_date_key()))
 	var short_date := DailyChallenge.format_display_date(dkey, false)
+	_apply_milestone_for_score(0, true)
 	hud_view.set_daily_badge(true, short_date, int(res.get("attempt_number", 1)), DailyChallenge.MAX_DAILY_ATTEMPTS)
 	hud_view.set_initial_state(controller.score_engine.score, controller.score_engine.high_score)
 	board_view.set_board_state(controller.board)
@@ -284,6 +376,7 @@ func start_sprint_run(seed_value: int = -1) -> void:
 		bgm_manager.set_mode(BgmManager.Mode.PLAYING)
 
 	controller.start_sprint_game(seed_value)
+	_apply_milestone_for_score(0, true)
 	hud_view.set_sprint_badge(true, controller.sprint_moves_left, controller.sprint_moves_limit)
 	hud_view.set_initial_state(controller.score_engine.score, controller.score_engine.high_score)
 	board_view.set_board_state(controller.board)
@@ -314,6 +407,7 @@ func start_gem_hunt_run(seed_value: int = -1, start_stage: int = 1) -> void:
 		bgm_manager.set_mode(BgmManager.Mode.PLAYING)
 
 	controller.start_gem_hunt_game(seed_value, start_stage)
+	_apply_milestone_for_score(0, true)
 	hud_view.set_gem_hunt_badge(
 		true,
 		controller.gem_hunt_stage,
@@ -361,6 +455,7 @@ func _try_resume_saved_mode(mode: int) -> bool:
 		board_view.set_heat_level(controller.score_engine.combo_streak, controller.score_engine.fever_active)
 
 	hud_view.set_initial_state(controller.score_engine.score, controller.score_engine.high_score)
+	_apply_milestone_for_score(controller.score_engine.score, true)
 	if controller.is_daily_mode():
 		var short_d := DailyChallenge.format_display_date(controller.daily_date_key, false)
 		hud_view.set_daily_badge(true, short_d, controller.daily_attempt_number, DailyChallenge.MAX_DAILY_ATTEMPTS)
@@ -396,7 +491,8 @@ func _show_title_screen() -> void:
 			_build_daily_title_info(),
 			_build_sprint_title_info(),
 			_build_gem_hunt_title_info(),
-			_build_classic_title_info()
+			_build_classic_title_info(),
+			controller.save_manager.coins
 		)
 
 
@@ -546,6 +642,11 @@ func _build_scene_hierarchy() -> void:
 	gem_stage_select_overlay.z_index = 132
 	add_child(gem_stage_select_overlay)
 
+	skin_shop_overlay = SkinShopOverlay.new()
+	skin_shop_overlay.name = "SkinShopOverlay"
+	skin_shop_overlay.z_index = 134
+	add_child(skin_shop_overlay)
+
 	settings_overlay = SettingsOverlay.new()
 	settings_overlay.name = "SettingsOverlay"
 	settings_overlay.z_index = 135
@@ -561,10 +662,14 @@ func _build_scene_hierarchy() -> void:
 	studio_splash.z_index = 150
 	add_child(studio_splash)
 
-	# 5. Procedural stereo rising-pitch audio synth, BGM manager & SDK-ready AdBridge.
+	# 5. Procedural stereo rising-pitch audio synth, BGM manager, Notifications & SDK-ready AdBridge.
 	ad_bridge = AdBridge.new()
 	ad_bridge.name = "AdBridge"
 	add_child(ad_bridge)
+
+	notification_manager = NotificationManager.new()
+	notification_manager.name = "NotificationManager"
+	add_child(notification_manager)
 
 	sound_synth = SoundSynth.new()
 	sound_synth.name = "SoundSynth"
@@ -622,14 +727,19 @@ func _init_controller_and_signals() -> void:
 	title_overlay.daily_pressed.connect(_on_title_daily_pressed)
 	title_overlay.sprint_pressed.connect(_on_title_sprint_pressed)
 	title_overlay.gem_hunt_pressed.connect(_on_open_gem_stage_select)
+	title_overlay.skins_pressed.connect(_on_open_skin_shop)
 	title_overlay.settings_pressed.connect(_on_title_settings_requested)
 	title_overlay.how_to_play_pressed.connect(_on_how_to_play_requested)
 	gem_stage_select_overlay.stage_selected.connect(_on_gem_stage_selected)
 	gem_stage_select_overlay.resume_pressed.connect(_on_gem_stage_resume_pressed)
 	gem_stage_select_overlay.closed.connect(func() -> void: sound_synth.play_pickup())
+	skin_shop_overlay.skin_equipped.connect(_on_skin_equipped)
+	skin_shop_overlay.skin_unlocked.connect(_on_skin_unlocked)
+	skin_shop_overlay.closed.connect(func() -> void: sound_synth.play_pickup(); _show_title_screen())
 	settings_overlay.sfx_toggled.connect(_on_sfx_toggled)
 	settings_overlay.bgm_toggled.connect(_on_bgm_toggled)
 	settings_overlay.vibration_toggled.connect(_on_vibration_toggled)
+	settings_overlay.notifications_toggled.connect(_on_notifications_toggled)
 	settings_overlay.how_to_play_pressed.connect(_on_how_to_play_requested)
 	settings_overlay.replay_pressed.connect(_on_restart_requested)
 	settings_overlay.home_pressed.connect(_on_home_requested)
@@ -699,6 +809,11 @@ func _apply_saved_settings() -> void:
 	var sfx_on := sm.sfx_enabled if sm != null else true
 	var bgm_on := sm.bgm_enabled if sm != null else true
 	_vibration_enabled = sm.vibration_enabled if sm != null else true
+	_notifications_enabled = sm.notifications_enabled if sm != null else true
+	if sm != null:
+		TilePainter.set_active_skin(sm.equipped_skin)
+	if notification_manager != null:
+		notification_manager.set_enabled(_notifications_enabled, false)
 
 	sound_synth.set_muted(not sfx_on)
 	if bgm_manager != null:
@@ -711,7 +826,7 @@ func _persist_settings() -> void:
 	if controller != null and controller.save_manager != null:
 		var sfx_on := not sound_synth.is_muted()
 		var bgm_on := bgm_manager.is_bgm_enabled() if bgm_manager != null else true
-		controller.save_manager.update_settings(sfx_on, bgm_on, _vibration_enabled)
+		controller.save_manager.update_settings(sfx_on, bgm_on, _vibration_enabled, _notifications_enabled)
 
 
 func _vibrate(duration_ms: int) -> void:
@@ -743,7 +858,8 @@ func _on_hud_settings_requested() -> void:
 			_vibration_enabled,
 			true,
 			replay_lbl,
-			replay_ok
+			replay_ok,
+			_notifications_enabled
 		)
 
 
@@ -754,7 +870,10 @@ func _on_title_settings_requested() -> void:
 			not sound_synth.is_muted(),
 			bgm_manager.is_bgm_enabled() if bgm_manager != null else true,
 			_vibration_enabled,
-			false
+			false,
+			"Replay",
+			true,
+			_notifications_enabled
 		)
 
 
@@ -805,9 +924,19 @@ func _on_vibration_toggled(enabled: bool) -> void:
 	_persist_settings()
 
 
+func _on_notifications_toggled(enabled: bool) -> void:
+	_notifications_enabled = enabled
+	sound_synth.play_pickup()
+	if notification_manager != null:
+		notification_manager.set_enabled(enabled, true)
+	_persist_settings()
+
+
 func _on_restart_requested() -> void:
 	if gem_stage_select_overlay != null:
 		gem_stage_select_overlay.close_selector(false)
+	if skin_shop_overlay != null:
+		skin_shop_overlay.close_shop(false)
 	if how_to_play_overlay != null:
 		how_to_play_overlay.close_guide(false)
 	if settings_overlay != null:
@@ -833,6 +962,8 @@ func _on_home_requested() -> void:
 	_persist_active_run_if_needed()
 	if gem_stage_select_overlay != null:
 		gem_stage_select_overlay.close_selector(false)
+	if skin_shop_overlay != null:
+		skin_shop_overlay.close_shop(false)
 	if how_to_play_overlay != null:
 		how_to_play_overlay.close_guide(false)
 	if settings_overlay != null:
@@ -853,6 +984,7 @@ func _on_home_requested() -> void:
 	_bg_heat_target = 0.0
 	_bg_speed_target = 0.58
 	_bg_pulse = 0.0
+	_apply_milestone_for_score(0, false)
 	if bgm_manager != null:
 		bgm_manager.set_mode(BgmManager.Mode.TITLE)
 	_show_title_screen()
@@ -865,6 +997,7 @@ func _on_title_play_pressed() -> void:
 			playfield_root.visible = true
 		if tray_view != null:
 			tray_view.set_input_enabled(true)
+		_apply_milestone_for_score(controller.score_engine.score, true)
 		_update_atmosphere(controller.score_engine.combo_streak, controller.score_engine.fever_active, false, false)
 		sound_synth.play_combo_clear(4, 2, false)
 		tray_view.animate_tray_refill()
@@ -878,6 +1011,53 @@ func _on_title_play_pressed() -> void:
 
 	start_fresh_run(-1, false)
 	sound_synth.play_combo_clear(4, 2, false)
+
+
+func _on_open_skin_shop() -> void:
+	sound_synth.play_pickup()
+	if skin_shop_overlay != null:
+		skin_shop_overlay.open_shop(controller.save_manager)
+
+
+func _on_skin_equipped(_skin_id: String) -> void:
+	sound_synth.play_combo_clear(4, 1, false)
+	if board_view != null:
+		board_view.refresh()
+	if tray_view != null:
+		tray_view.queue_redraw()
+	if title_overlay != null and title_overlay.visible:
+		_show_title_screen()
+
+
+func _on_skin_unlocked(_skin_id: String, _remaining_coins: int) -> void:
+	sound_synth.play_high_score()
+	_vibrate(40)
+	if title_overlay != null and title_overlay.visible:
+		_show_title_screen()
+
+
+func _apply_milestone_for_score(current_score: int, immediate: bool = false) -> int:
+	var tier := 0
+	for i in range(MILESTONE_THEMES.size()):
+		if current_score >= int(MILESTONE_THEMES[i]["min_score"]):
+			tier = i
+	var prev_tier := _current_milestone_tier
+	_current_milestone_tier = tier
+	var theme: Dictionary = MILESTONE_THEMES[tier]
+	_bg_target_deep = theme["bg_deep"] as Color
+	_bg_target_mid = theme["bg_mid"] as Color
+	_bg_target_accent = theme["bg_accent"] as Color
+	if immediate:
+		_bg_col_deep = _bg_target_deep
+		_bg_col_mid = _bg_target_mid
+		_bg_col_accent = _bg_target_accent
+		if swirl_mat != null:
+			swirl_mat.set_shader_parameter("color_deep", _bg_col_deep)
+			swirl_mat.set_shader_parameter("color_mid", _bg_col_mid)
+			swirl_mat.set_shader_parameter("color_accent", _bg_col_accent)
+	if board_view != null:
+		board_view.set_milestone_theme(theme["bezel"] as Color, theme["rim"] as Color, immediate)
+	return tier if (not immediate and tier > prev_tier) else -1
 
 
 func _on_open_gem_stage_select() -> void:
@@ -930,6 +1110,7 @@ func _on_gem_stage_resume_pressed() -> void:
 			playfield_root.visible = true
 		if tray_view != null:
 			tray_view.set_input_enabled(true)
+		_apply_milestone_for_score(controller.score_engine.score, true)
 		_update_atmosphere(controller.score_engine.combo_streak, controller.score_engine.fever_active, false, false)
 		sound_synth.play_combo_clear(5, 2, false)
 		tray_view.animate_tray_refill()
@@ -951,6 +1132,7 @@ func _on_title_sprint_pressed() -> void:
 			playfield_root.visible = true
 		if tray_view != null:
 			tray_view.set_input_enabled(true)
+		_apply_milestone_for_score(controller.score_engine.score, true)
 		_update_atmosphere(controller.score_engine.combo_streak, controller.score_engine.fever_active, false, false)
 		sound_synth.play_combo_clear(5, 2, false)
 		tray_view.animate_tray_refill()
@@ -979,6 +1161,7 @@ func _on_title_daily_pressed() -> void:
 			playfield_root.visible = true
 		if tray_view != null:
 			tray_view.set_input_enabled(true)
+		_apply_milestone_for_score(controller.score_engine.score, true)
 		_update_atmosphere(controller.score_engine.combo_streak, controller.score_engine.fever_active, false, false)
 		sound_synth.play_combo_clear(4, 2, false)
 		tray_view.animate_tray_refill()
@@ -1235,7 +1418,21 @@ func _on_move_resolved(result: Dictionary) -> void:
 			slot_bg
 		)
 
-	# 6. FEVER ignition & one-shot New Record celebration!
+	# 6. FEVER ignition, Score Milestone Zone Level-Up & one-shot New Record celebration!
+	var new_milestone_tier := _apply_milestone_for_score(int(result.get("new_score", controller.score_engine.score)), false)
+	if new_milestone_tier > 0:
+		var m_theme: Dictionary = MILESTONE_THEMES[new_milestone_tier]
+		var m_name := String(m_theme.get("name", "NEW ZONE"))
+		var m_rim := m_theme.get("rim", Color("#3CE8FF")) as Color
+		board_view.trigger_clear_flash(0.95, m_rim)
+		vfx_layer.spawn_floating_text(
+			Vector2(270.0, 246.0),
+			"LEVEL UP! • %s" % m_name,
+			Color("#FFF8B8"),
+			24,
+			-1.8,
+			m_theme.get("bg_accent", Color("#2A4298")) as Color
+		)
 	if fever_just_ignited:
 		sound_synth.play_fever_ignite()
 		_vibrate(65)
@@ -1395,6 +1592,7 @@ func resume_game() -> void:
 		or (settings_overlay != null and settings_overlay.is_open())
 		or (how_to_play_overlay != null and how_to_play_overlay.is_open())
 		or (gem_stage_select_overlay != null and gem_stage_select_overlay.is_open())
+		or (skin_shop_overlay != null and skin_shop_overlay.is_open())
 	)
 	if playfield_root != null and playfield_root.visible and not controller.is_game_over and not modal_blocking and tray_view != null:
 		tray_view.set_input_enabled(true)

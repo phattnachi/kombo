@@ -9,6 +9,7 @@ signal play_pressed()
 signal daily_pressed()
 signal sprint_pressed()
 signal gem_hunt_pressed()
+signal skins_pressed()
 signal settings_pressed()
 signal how_to_play_pressed()
 
@@ -32,6 +33,7 @@ var _sb_badge_shadow: StyleBoxFlat
 var _sb_badge_body: StyleBoxFlat
 
 var _high_score: int = 0
+var _coins: int = 0
 var _time_sec: float = 0.0
 var _is_open: bool = true
 var _fade_alpha: float = 1.0
@@ -42,6 +44,7 @@ var _play_btn: _TitlePlayButton
 var _daily_btn: _TitleDailyButton
 var _sprint_btn: _TitleSprintButton
 var _gem_btn: _TitleGemHuntButton
+var _skins_btn: _TitleSkinsButton
 var _help_btn: _TitleTopIconButton
 var _settings_btn: _TitleTopIconButton
 
@@ -103,8 +106,9 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
-func show_title(high_score: int, daily_info: Dictionary = {}, sprint_info: Dictionary = {}, gem_info: Dictionary = {}, classic_info: Dictionary = {}) -> void:
+func show_title(high_score: int, daily_info: Dictionary = {}, sprint_info: Dictionary = {}, gem_info: Dictionary = {}, classic_info: Dictionary = {}, coins_balance: int = 0) -> void:
 	_high_score = maxi(0, high_score)
+	_coins = maxi(0, coins_balance)
 	_is_open = true
 	_dismissing = false
 	_fade_alpha = 1.0
@@ -119,6 +123,8 @@ func show_title(high_score: int, daily_info: Dictionary = {}, sprint_info: Dicti
 		_sprint_btn.set_sprint_info(sprint_info)
 	if _gem_btn != null:
 		_gem_btn.set_gem_info(gem_info)
+	if _skins_btn != null:
+		_skins_btn.set_coins(_coins)
 	_layout_button()
 	queue_redraw()
 
@@ -270,6 +276,14 @@ func _build_play_button() -> void:
 	_gem_btn.pressed_clean.connect(_trigger_gem_hunt)
 	add_child(_gem_btn)
 
+	_skins_btn = _TitleSkinsButton.new()
+	_skins_btn.name = "TitleSkinsButton"
+	_skins_btn.font_extrabold = _font_extrabold
+	_skins_btn.font_bold = _font_bold
+	_skins_btn.size = Vector2(324.0, 44.0)
+	_skins_btn.pressed_clean.connect(func() -> void: skins_pressed.emit())
+	add_child(_skins_btn)
+
 	_help_btn = _TitleTopIconButton.new()
 	_help_btn.name = "TitleHelpButton"
 	_help_btn.is_help_icon = true
@@ -304,6 +318,8 @@ func _layout_button() -> void:
 		_sprint_btn.position = Vector2(row2_x + MODE_CARD_SIZE.x + MODE_CARD_GAP, cy + 194.0)
 	if _gem_btn != null:
 		_gem_btn.position = Vector2(row2_x + (MODE_CARD_SIZE.x + MODE_CARD_GAP) * 2.0, cy + 194.0)
+	if _skins_btn != null:
+		_skins_btn.position = Vector2(cx - 162.0, cy + 286.0)
 	if _help_btn != null:
 		_help_btn.position = Vector2(vw - 106.0, 16.0)
 	if _settings_btn != null:
@@ -395,7 +411,7 @@ func _draw() -> void:
 	_draw_centered_outlined_text(
 		self,
 		_font_bold,
-		Vector2(cx, cy + 312.0),
+		Vector2(cx, cy + 346.0),
 		"DRAG BLOCKS  •  STASH IN HOLD  •  IGNITE FEVER",
 		12,
 		Color(0.72, 0.84, 1.0, 0.68),
@@ -1249,3 +1265,120 @@ class _TitleGemHuntButton extends Control:
 		GameOverOverlay._draw_centered_outlined_text(self, used_b, Vector2(fc.x, face.position.y + 62.0), sub_label, 10, Color("#DEFFFF"), outline_col, 2, 0.8)
 
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+class _TitleSkinsButton extends Control:
+	signal pressed_clean()
+
+	var font_extrabold: Font
+	var font_bold: Font
+	var _coins: int = 0
+	var _hovered: bool = false
+	var _pressed: bool = false
+	var _sb_shadow: StyleBoxFlat
+	var _sb_face: StyleBoxFlat
+	var _sb_coin_pill: StyleBoxFlat
+
+	func set_coins(c: int) -> void:
+		_coins = maxi(0, c)
+		queue_redraw()
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		mouse_entered.connect(func() -> void: _hovered = true; queue_redraw())
+		mouse_exited.connect(func() -> void: _hovered = false; _pressed = false; queue_redraw())
+
+		_sb_shadow = StyleBoxFlat.new()
+		_sb_shadow.bg_color = Color(0.01, 0.02, 0.08, 0.58)
+		_sb_shadow.set_corner_radius_all(14)
+		_sb_shadow.corner_detail = 8
+
+		_sb_face = StyleBoxFlat.new()
+		_sb_face.bg_color = Color("#162354")
+		_sb_face.set_corner_radius_all(14)
+		_sb_face.corner_detail = 8
+		_sb_face.set_border_width_all(2)
+		_sb_face.border_color = Color("#4CE4FF", 0.82)
+
+		_sb_coin_pill = StyleBoxFlat.new()
+		_sb_coin_pill.bg_color = Color("#0A122C", 0.92)
+		_sb_coin_pill.set_corner_radius_all(10)
+		_sb_coin_pill.corner_detail = 6
+		_sb_coin_pill.set_border_width_all(1)
+		_sb_coin_pill.border_color = Color("#FFD43B", 0.85)
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton:
+			var mb := event as InputEventMouseButton
+			if mb.button_index == MOUSE_BUTTON_LEFT:
+				if mb.pressed:
+					_pressed = true
+					queue_redraw()
+				else:
+					var hit := _pressed and Rect2(Vector2.ZERO, size).has_point(mb.position)
+					_pressed = false
+					queue_redraw()
+					if hit:
+						accept_event()
+						pressed_clean.emit()
+		elif event is InputEventScreenTouch:
+			var st := event as InputEventScreenTouch
+			if st.pressed:
+				_pressed = true
+				queue_redraw()
+			else:
+				var hit := _pressed and Rect2(Vector2.ZERO, size).has_point(st.position)
+				_pressed = false
+				queue_redraw()
+				if hit:
+					accept_event()
+					pressed_clean.emit()
+
+	func _draw() -> void:
+		var cid := get_canvas_item()
+		var rect := Rect2(Vector2.ZERO, size)
+		_sb_shadow.draw(cid, Rect2(Vector2(0.0, 4.0), size))
+		_sb_face.bg_color = Color("#1D2E6B") if _hovered else Color("#152250")
+		_sb_face.draw(cid, rect)
+
+		# Left mini live skin tile preview (24x24)
+		var active_skin := TilePainter.get_active_skin()
+		var preview_tex := TilePainter.get_skin_preview_texture(active_skin, 1)
+		if preview_tex != null:
+			draw_texture_rect(preview_tex, Rect2(14.0, (size.y - 24.0) * 0.5, 24.0, 24.0), false)
+
+		var used_eb := font_extrabold if font_extrabold != null else ThemeDB.fallback_font
+		GameOverOverlay._draw_left_outlined_text(
+			self,
+			used_eb,
+			Vector2(48.0, size.y * 0.5),
+			"BLOCK SKINS",
+			16,
+			Color("#FFF6B3"),
+			Color("#09102A"),
+			4,
+			1.4
+		)
+
+		# Right Coin Balance Pill
+		var coin_str := HudView.format_comma_int(_coins)
+		var pill_w := clampf(44.0 + float(coin_str.length()) * 9.5, 78.0, 124.0)
+		var pill_r := Rect2(size.x - pill_w - 10.0, (size.y - 28.0) * 0.5, pill_w, 28.0)
+		_sb_coin_pill.draw(cid, pill_r)
+
+		var cc := Vector2(pill_r.position.x + 15.0, pill_r.get_center().y)
+		draw_circle(cc, 7.5, Color("#B85D00"))
+		draw_circle(cc, 6.0, Color("#FFD43B"))
+		draw_circle(cc + Vector2(-1.5, -1.5), 2.2, Color("#FFF8C4"))
+		GameOverOverlay._draw_left_outlined_text(
+			self,
+			used_eb,
+			Vector2(cc.x + 12.0, pill_r.get_center().y),
+			coin_str,
+			14,
+			Color("#FFE866"),
+			Color("#2B1400"),
+			3,
+			1.0
+		)
