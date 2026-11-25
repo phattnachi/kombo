@@ -51,6 +51,13 @@ var _fever_ember_accum: float = 0.0
 var _mult_tilt_sign: float = -1.0
 var _was_active: bool = false
 
+# First-move zero-reading visual drag hint (automatically dismissed on first drag).
+var _drag_hint_active: bool = false
+var _drag_hint_from: Vector2 = Vector2.ZERO
+var _drag_hint_to: Vector2 = Vector2.ZERO
+var _drag_hint_cells: Array[Rect2] = []
+var _drag_hint_t: float = 0.0
+
 # Lightweight Dictionary pools (zero per-particle SceneTree nodes).
 var _sweeps: Array[Dictionary] = []
 var _flashes: Array[Dictionary] = []
@@ -109,6 +116,8 @@ func _process(delta: float) -> void:
 	_update_sparks(dt)
 	_update_score_orbs(dt)
 	_update_popups(dt)
+	if _drag_hint_active:
+		_drag_hint_t = fmod(_drag_hint_t + dt, 1.90)
 
 	var active_now: bool = _has_visual_activity()
 	if active_now or _was_active:
@@ -911,6 +920,30 @@ func clear_all() -> void:
 	_fever_target = 0.0
 	_fever_intensity = 0.0
 	_fever_ember_accum = 0.0
+	_drag_hint_active = false
+	_drag_hint_cells.clear()
+	queue_redraw()
+
+
+## Shows a gentle animated drag-to-board visual guide on the player's very first move
+## so new players immediately understand drag & drop with zero reading required.
+func set_drag_hint(from_pos: Vector2, to_pos: Vector2, cell_rects: Array[Rect2]) -> void:
+	if cell_rects.is_empty():
+		clear_drag_hint()
+		return
+	_drag_hint_active = true
+	_drag_hint_from = from_pos
+	_drag_hint_to = to_pos
+	_drag_hint_cells = cell_rects.duplicate()
+	_drag_hint_t = 0.0
+	queue_redraw()
+
+
+func clear_drag_hint() -> void:
+	if not _drag_hint_active:
+		return
+	_drag_hint_active = false
+	_drag_hint_cells.clear()
 	queue_redraw()
 
 
@@ -919,7 +952,7 @@ func clear_all() -> void:
 # ==============================================================================
 
 func _has_visual_activity() -> bool:
-	return _trauma > 0.0001 or get_active_particle_count() > 0
+	return _drag_hint_active or _trauma > 0.0001 or get_active_particle_count() > 0
 
 
 func _recompute_shake_offset() -> void:
@@ -1179,6 +1212,68 @@ func _draw() -> void:
 
 	if not _popups.is_empty():
 		_draw_popups()
+
+	if _drag_hint_active:
+		_draw_drag_hint()
+
+
+func _draw_drag_hint() -> void:
+	if not _drag_hint_active or _drag_hint_cells.is_empty():
+		return
+	var p: float = clampf(_drag_hint_t / 1.90, 0.0, 1.0)
+	var fade: float = smoothstep(0.0, 0.09, p) * (1.0 - smoothstep(0.86, 1.0, p))
+	if fade <= 0.01:
+		return
+
+	# Smooth curved glide from tray piece up to target footprint on 8x8 board.
+	var move_u: float = clampf((p - 0.16) / 0.56, 0.0, 1.0)
+	var ease_u: float = move_u * move_u * (3.0 - 2.0 * move_u)
+	var ctrl: Vector2 = _drag_hint_from.lerp(_drag_hint_to, 0.5) + Vector2(34.0, -24.0)
+	var inv_u: float = 1.0 - ease_u
+	var cur_pos: Vector2 = (inv_u * inv_u) * _drag_hint_from + (2.0 * inv_u * ease_u) * ctrl + (ease_u * ease_u) * _drag_hint_to
+
+	# 1. Soft pulsing target cell footprint on board (crystal-clear landing zone).
+	var land_boost: float = smoothstep(0.60, 0.76, p)
+	var pulse: float = 0.5 + 0.5 * sin(_time * 6.5)
+	var fill_a: float = (0.14 + 0.10 * pulse + 0.14 * land_boost) * fade
+	var rim_a: float = (0.55 + 0.25 * pulse + 0.20 * land_boost) * fade
+	for cr: Rect2 in _drag_hint_cells:
+		var inner_r: Rect2 = cr.grow(-3.0)
+		draw_rect(inner_r, Color(0.28, 0.92, 1.0, fill_a), true)
+		draw_rect(inner_r, Color(0.75, 0.98, 1.0, rim_a), false, 2.4, true)
+
+	# 2. Gentle dotted motion arc guiding eye from tray piece to target cells.
+	var dot_count: int = 8
+	for i: int in range(1, dot_count):
+		var du: float = float(i) / float(dot_count)
+		var di: float = 1.0 - du
+		var dpos: Vector2 = (di * di) * _drag_hint_from + (2.0 * di * du) * ctrl + (du * du) * _drag_hint_to
+		var lead_glow: float = clampf(1.0 - absf(du - ease_u) * 3.2, 0.0, 1.0)
+		var dot_r: float = lerpf(2.8, 4.6, lead_glow)
+		draw_circle(dpos, dot_r, Color(0.62, 0.96, 1.0, (0.28 + 0.52 * lead_glow) * fade))
+
+	# 3. Source press ripple & landing bloom ring.
+	if p < 0.28:
+		var rp: float = clampf(p / 0.28, 0.0, 1.0)
+		draw_arc(_drag_hint_from, lerpf(12.0, 34.0, rp), 0.0, TAU, 24, Color(1.0, 0.92, 0.52, (1.0 - rp) * 0.72), 2.8, true)
+	if p > 0.70:
+		var lp: float = clampf((p - 0.70) / 0.26, 0.0, 1.0)
+		draw_arc(_drag_hint_to, lerpf(14.0, 42.0, lp), 0.0, TAU, 24, Color(0.42, 0.96, 1.0, (1.0 - lp) * 0.80), 3.0, true)
+
+	# 4. Crisp glowing touch-pointer cursor gliding smoothly along the drag path.
+	var press_scale: float = 0.88 if (p > 0.12 and p < 0.74) else 1.0
+	var glow_r: float = 22.0 * press_scale
+	if _radial_glow_tex != null:
+		draw_texture_rect(
+			_radial_glow_tex,
+			Rect2(cur_pos - Vector2(glow_r, glow_r), Vector2(glow_r * 2.0, glow_r * 2.0)),
+			false,
+			Color(1.0, 0.90, 0.45, 0.52 * fade)
+		)
+	draw_circle(cur_pos + Vector2(0.0, 2.5), 11.5 * press_scale, Color(0.03, 0.06, 0.18, 0.50 * fade))
+	draw_circle(cur_pos, 11.0 * press_scale, Color(1.0, 0.98, 0.90, 0.94 * fade))
+	draw_arc(cur_pos, 11.0 * press_scale, 0.0, TAU, 24, Color(0.18, 0.84, 1.0, 0.92 * fade), 2.5, true)
+	draw_circle(cur_pos, 4.2 * press_scale, Color(0.16, 0.82, 1.0, 0.95 * fade))
 
 
 # ==============================================================================

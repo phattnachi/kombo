@@ -106,6 +106,7 @@ var _playfield_base_pos: Vector2 = Vector2.ZERO
 var _vibration_enabled: bool = true
 var _notifications_enabled: bool = true
 var _audio_gesture_unlocked: bool = false
+var _first_move_hint_done: bool = false
 var is_game_paused: bool = false
 var is_processing_ad: bool = false
 var _sound_muted_by_ad: bool = false
@@ -317,6 +318,7 @@ func start_fresh_run(seed_value: int = -1, clear_saved_classic: bool = true) -> 
 	tray_view.set_heat_level(0, false)
 	tray_view.sync_from_controller(controller)
 	tray_view.animate_tray_refill()
+	_try_show_first_move_drag_hint()
 
 
 func start_daily_run(date_key: String = "") -> bool:
@@ -351,6 +353,7 @@ func start_daily_run(date_key: String = "") -> bool:
 	tray_view.set_heat_level(0, false)
 	tray_view.sync_from_controller(controller)
 	tray_view.animate_tray_refill()
+	_try_show_first_move_drag_hint()
 	_persist_active_run_if_needed()
 	return true
 
@@ -384,6 +387,7 @@ func start_sprint_run(seed_value: int = -1) -> void:
 	tray_view.set_heat_level(0, false)
 	tray_view.sync_from_controller(controller)
 	tray_view.animate_tray_refill()
+	_try_show_first_move_drag_hint()
 
 
 func start_gem_hunt_run(seed_value: int = -1, start_stage: int = 1) -> void:
@@ -421,6 +425,7 @@ func start_gem_hunt_run(seed_value: int = -1, start_stage: int = 1) -> void:
 	tray_view.set_heat_level(0, false)
 	tray_view.sync_from_controller(controller)
 	tray_view.animate_tray_refill()
+	_try_show_first_move_drag_hint()
 
 
 func _persist_active_run_if_needed() -> void:
@@ -480,6 +485,7 @@ func _try_resume_saved_mode(mode: int) -> bool:
 	tray_view.set_heat_level(se.combo_streak, se.fever_active)
 	tray_view.sync_from_controller(controller)
 	tray_view.animate_tray_refill()
+	_try_show_first_move_drag_hint()
 	_update_atmosphere(se.combo_streak, se.fever_active, false, false)
 	return true
 
@@ -756,6 +762,9 @@ func _init_controller_and_signals() -> void:
 # ==============================================================================
 
 func _on_drag_started(_source_type: String, _slot_idx: int, _piece: PieceCatalog.Piece) -> void:
+	_first_move_hint_done = true
+	if vfx_layer != null:
+		vfx_layer.clear_drag_hint()
 	sound_synth.play_pickup()
 
 
@@ -1313,6 +1322,9 @@ func _on_hold_changed(_hold_piece: PieceCatalog.Piece) -> void:
 func _on_move_resolved(result: Dictionary) -> void:
 	if not bool(result.get("valid", false)):
 		return
+	_first_move_hint_done = true
+	if vfx_layer != null:
+		vfx_layer.clear_drag_hint()
 
 	var placed_cells: Array[Vector2i] = []
 	for c in (result.get("placed_cells", []) as Array):
@@ -1798,6 +1810,7 @@ func grant_revive() -> bool:
 	board_view.trigger_clear_flash(1.0, Color("#3CF27E"))
 	tray_view.sync_from_controller(controller)
 	tray_view.animate_tray_refill()
+	_try_show_first_move_drag_hint()
 	tray_view.set_input_enabled(true)
 
 	var se := controller.score_engine
@@ -1917,3 +1930,56 @@ func _update_atmosphere(combo_streak: int, fever_active: bool, did_clear: bool, 
 func _cell_center_in_playfield(cell: Vector2i) -> Vector2:
 	var r := board_view.get_cell_rect(cell.y, cell.x)
 	return board_view.position + r.get_center()
+
+
+func _try_show_first_move_drag_hint() -> void:
+	if _first_move_hint_done or controller == null or vfx_layer == null or board_view == null or tray_view == null:
+		return
+	if playfield_root == null or not playfield_root.visible:
+		return
+	if controller.turn_count > 0 or controller.is_game_over:
+		return
+
+	# Pick middle piece first (or first playable piece in tray) and find the center-most legal board origin.
+	var slot_order: Array[int] = [1, 0, 2]
+	var chosen_slot: int = -1
+	var chosen_piece: PieceCatalog.Piece = null
+	var best_origin: Vector2i = Vector2i(-1, -1)
+	var best_dist_sq: float = 999999.0
+	var board_mid := Vector2(3.5, 3.5)
+
+	for s_idx in slot_order:
+		var p := controller.get_tray_piece(s_idx)
+		if p == null:
+			continue
+		var placements := controller.board.get_valid_placements(p)
+		if placements.is_empty():
+			continue
+		chosen_slot = s_idx
+		chosen_piece = p
+		for orig in placements:
+			var sum_pos := Vector2.ZERO
+			for off in p.cells:
+				sum_pos += Vector2(orig.x + off.x, orig.y + off.y)
+			var c_cell := sum_pos / float(maxi(1, p.cells.size()))
+			var d2 := c_cell.distance_squared_to(board_mid)
+			if d2 < best_dist_sq:
+				best_dist_sq = d2
+				best_origin = orig
+		break
+
+	if chosen_slot < 0 or chosen_piece == null or best_origin.x < 0:
+		return
+
+	var from_pf: Vector2 = tray_view.position + tray_view.get_slot_rect(chosen_slot).get_center()
+	var cell_rects: Array[Rect2] = []
+	var target_sum := Vector2.ZERO
+	for off in chosen_piece.cells:
+		var cx: int = best_origin.x + off.x
+		var cy: int = best_origin.y + off.y
+		var local_r: Rect2 = board_view.get_cell_rect(cy, cx)
+		var pf_r := Rect2(board_view.position + local_r.position, local_r.size)
+		cell_rects.append(pf_r)
+		target_sum += pf_r.get_center()
+	var to_pf: Vector2 = target_sum / float(maxi(1, cell_rects.size()))
+	vfx_layer.set_drag_hint(from_pf, to_pf, cell_rects)
